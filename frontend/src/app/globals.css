@@ -38,33 +38,91 @@ h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-syne), 'Syne', sans-serif;
 }
 
+::selection {
+  background: rgba(0, 212, 180, 0.18);
+  color: var(--text);
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: var(--bg-surface); }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #1E2D42; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #6B7A99; }
 
-/* Utility classes */
 @layer components {
+
+  /* ── Cards ─────────────────────────────────────── */
+
   .card {
     @apply bg-bg-card border border-border rounded-card p-6;
   }
 
+  .card-sm {
+    @apply bg-bg-card border border-border rounded-xl p-4;
+  }
+
+  .card-interactive {
+    @apply bg-bg-card border border-border rounded-card p-6 transition-all duration-200;
+  }
+
+  .card-interactive:hover {
+    border-color: rgba(0, 212, 180, 0.22);
+    transform: translateY(-2px);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(0, 212, 180, 0.06);
+  }
+
+  /* ── Buttons ────────────────────────────────────── */
+
   .btn-teal {
-    @apply bg-teal text-bg font-semibold px-6 py-3 rounded-xl hover:bg-teal-dim transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+    @apply font-semibold px-6 py-3 rounded-xl transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2;
+    background: #00D4B4;
+    color: #080D14;
+  }
+
+  .btn-teal:not(:disabled):hover {
+    background: #00A88F;
+    box-shadow: 0 0 28px rgba(0, 212, 180, 0.4), 0 4px 14px rgba(0, 0, 0, 0.3);
+    transform: translateY(-1px);
+  }
+
+  .btn-teal:not(:disabled):active {
+    transform: translateY(0);
+    box-shadow: none;
   }
 
   .btn-outline {
-    @apply border border-border text-text-soft font-medium px-6 py-3 rounded-xl hover:border-teal hover:text-teal transition-colors;
+    @apply border border-border font-medium px-6 py-3 rounded-xl transition-all duration-150 inline-flex items-center justify-center gap-2;
+    color: var(--text-soft);
+  }
+
+  .btn-outline:hover {
+    border-color: rgba(0, 212, 180, 0.4);
+    color: var(--teal);
   }
 
   .btn-ghost {
-    @apply text-muted hover:text-teal transition-colors px-3 py-2 rounded-lg hover:bg-teal-glow;
+    @apply font-medium px-3 py-2 rounded-lg transition-colors duration-150 inline-flex items-center gap-2;
+    color: var(--muted);
   }
 
-  .input {
-    @apply w-full bg-bg-surface border border-border rounded-xl px-4 py-3 text-text placeholder:text-muted focus:outline-none focus:border-teal transition-colors;
+  .btn-ghost:hover {
+    background: rgba(0, 212, 180, 0.06);
+    color: var(--teal);
   }
+
+  /* ── Input ──────────────────────────────────────── */
+
+  .input {
+    @apply w-full bg-bg-surface border border-border rounded-xl px-4 py-3 placeholder:text-muted focus:outline-none transition-all duration-150;
+    color: var(--text);
+  }
+
+  .input:focus {
+    border-color: rgba(0, 212, 180, 0.5);
+    box-shadow: 0 0 0 3px rgba(0, 212, 180, 0.08);
+  }
+
+  /* ── Badges ─────────────────────────────────────── */
 
   .badge-teal {
     @apply inline-flex items-center gap-1 bg-teal/10 text-teal text-xs font-medium px-2.5 py-1 rounded-full;
@@ -82,9 +140,13 @@ h1, h2, h3, h4, h5, h6 {
     @apply inline-flex items-center gap-1 bg-red-500/10 text-red-400 text-xs font-medium px-2.5 py-1 rounded-full;
   }
 
+  /* ── Stat card ──────────────────────────────────── */
+
   .stat-card {
-    @apply card flex flex-col gap-2;
+    @apply card-interactive flex flex-col gap-2;
   }
+
+  /* ── Glow ───────────────────────────────────────── */
 
   .glow-teal {
     box-shadow: 0 0 24px rgba(0, 212, 180, 0.25);
@@ -95,7 +157,27 @@ h1, h2, h3, h4, h5, h6 {
   }
 }
 
-/* Animations */
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+  .gradient-text {
+    background: linear-gradient(135deg, #00D4B4 0%, #00F5D4 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .gradient-text-amber {
+    background: linear-gradient(135deg, #FF9500 0%, #FFB347 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+}
+
+/* ── Animations ─────────────────────────────────── */
+
 @keyframes pulse-teal {
   0%, 100% { box-shadow: 0 0 0 0 rgba(0, 212, 180, 0.4); }
   50% { box-shadow: 0 0 0 8px rgba(0, 212, 180, 0); }
@@ -107,10 +189,20 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 @keyframes fade-in {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-.animate-slide-up { animation: slide-up 0.3s ease-out; }
-.animate-fade-in { animation: fade-in 0.25s ease-out; }
+@keyframes status-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@keyframes spin-custom {
+  to { transform: rotate(360deg); }
+}
+
+.animate-slide-up { animation: slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1); }
+.animate-fade-in { animation: fade-in 0.3s ease-out; }
 .animate-pulse-teal { animation: pulse-teal 2s infinite; }
+.animate-status-blink { animation: status-blink 1.8s ease-in-out infinite; }

@@ -25,6 +25,10 @@ const config: Config = {
           dim: "#CC7700",
           glow: "rgba(255,149,0,0.15)",
         },
+        text: {
+          DEFAULT: "#E8EDF5",
+          soft: "#B0BCCC",
+        },
         muted: "#6B7A99",
         border: "#1E2D42",
       },
