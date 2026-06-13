@@ -15,6 +15,7 @@ import {
   Moon,
 } from "lucide-react";
 import AuthGuard from "@/components/AuthGuard";
+import { EsLogo } from "@/components/EsLogo";
 import { useAuthStore } from "@/stores/auth";
 import { cn } from "@/lib/utils";
 
@@ -84,16 +85,7 @@ function OwnerShell({ children }: { children: React.ReactNode }) {
         {/* Logo */}
         <div className="px-4 pt-5 pb-4">
           <div className="flex items-center gap-2.5">
-            <div
-              className="w-8 h-8 rounded-xl flex items-center justify-center font-display font-bold text-xs flex-shrink-0"
-              style={{
-                background: "linear-gradient(135deg, #00D4B4 0%, #00906B 100%)",
-                color: "#080D14",
-                boxShadow: "0 0 16px rgba(0,212,180,0.25)",
-              }}
-            >
-              ES
-            </div>
+            <EsLogo size={32} />
             <div>
               <p className="font-display font-bold text-sm leading-none" style={{ color: "var(--text)" }}>
                 EasyServe

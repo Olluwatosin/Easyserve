@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
+import { EsLogo } from "@/components/EsLogo";
 
 const HERO =
   "https://images.unsplash.com/photo-1559329007-40df8a9345d8?auto=format&fit=crop&w=1400&q=85";
@@ -89,16 +90,7 @@ export default function RegisterPage() {
 
         <div className="relative flex flex-col justify-between h-full p-12 z-10">
           <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center font-display font-bold text-sm"
-              style={{
-                background: "rgba(0,212,180,0.18)",
-                border: "1px solid rgba(0,212,180,0.35)",
-                color: "var(--teal)",
-              }}
-            >
-              ES
-            </div>
+            <EsLogo size={40} variant="glass" />
             <span className="font-display text-xl font-bold text-white">EasyServe</span>
           </div>
 
@@ -159,16 +151,7 @@ export default function RegisterPage() {
         <div className="relative w-full max-w-[400px] animate-fade-in">
           {/* Mobile logo */}
           <div className="flex flex-col items-center mb-6 lg:hidden">
-            <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
-              style={{
-                background:
-                  "linear-gradient(135deg, rgba(0,212,180,0.14) 0%, rgba(0,168,143,0.06) 100%)",
-                border: "1px solid rgba(0,212,180,0.22)",
-              }}
-            >
-              <span className="font-display text-xl font-bold text-teal">ES</span>
-            </div>
+            <EsLogo size={56} variant="glow-glass" className="mb-4" />
           </div>
 
           <div className="hidden lg:block mb-7">

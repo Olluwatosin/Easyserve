@@ -6,6 +6,7 @@ import { api } from "@/lib/api";
 import { getRoleHome } from "@/components/AuthGuard";
 import { Delete } from "lucide-react";
 import toast from "react-hot-toast";
+import { EsLogo } from "@/components/EsLogo";
 
 const PAD = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"];
 
@@ -85,18 +86,9 @@ export default function PinLoginPage() {
           }}
         />
 
-        {/* Top: ES badge */}
+        {/* Top: logo */}
         <div className="relative z-10">
-          <div
-            className="w-10 h-10 rounded-xl flex items-center justify-center font-display font-bold text-sm"
-            style={{
-              background: "linear-gradient(135deg, #00D4B4 0%, #00906B 100%)",
-              color: "#080D14",
-              boxShadow: "0 0 24px rgba(0,212,180,0.35)",
-            }}
-          >
-            ES
-          </div>
+          <EsLogo size={40} />
         </div>
 
         {/* Middle: Heading + features */}
@@ -153,16 +145,7 @@ export default function PinLoginPage() {
 
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center gap-3 mb-8">
-            <div
-              className="w-9 h-9 rounded-xl flex items-center justify-center font-display font-bold text-sm"
-              style={{
-                background: "linear-gradient(135deg, #00D4B4 0%, #00906B 100%)",
-                color: "#080D14",
-                boxShadow: "0 0 20px rgba(0,212,180,0.3)",
-              }}
-            >
-              ES
-            </div>
+            <EsLogo size={36} />
             <span
               className="font-display font-bold text-sm"
               style={{ color: "var(--text)" }}

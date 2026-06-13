@@ -7,6 +7,7 @@ import { useAuthStore } from "@/stores/auth";
 import { getRoleHome } from "@/components/AuthGuard";
 import { Eye, EyeOff } from "lucide-react";
 import toast from "react-hot-toast";
+import { EsLogo } from "@/components/EsLogo";
 
 const HERO =
   "https://images.unsplash.com/photo-1470337458703-46ad1756a187?auto=format&fit=crop&w=1400&q=85";
@@ -70,16 +71,7 @@ export default function LoginPage() {
         <div className="relative flex flex-col justify-between h-full p-12 z-10">
           {/* Top: wordmark */}
           <div className="flex items-center gap-3">
-            <div
-              className="w-10 h-10 rounded-xl flex items-center justify-center font-display font-bold text-sm"
-              style={{
-                background: "rgba(0,212,180,0.18)",
-                border: "1px solid rgba(0,212,180,0.35)",
-                color: "var(--teal)",
-              }}
-            >
-              ES
-            </div>
+            <EsLogo size={40} variant="glass" />
             <span className="font-display text-xl font-bold text-white">
               EasyServe
             </span>
@@ -128,17 +120,7 @@ export default function LoginPage() {
         <div className="relative w-full max-w-[390px] animate-fade-in">
           {/* Mobile-only logo */}
           <div className="flex flex-col items-center mb-8 lg:hidden">
-            <div
-              className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
-              style={{
-                background:
-                  "linear-gradient(135deg, rgba(0,212,180,0.14) 0%, rgba(0,168,143,0.06) 100%)",
-                border: "1px solid rgba(0,212,180,0.22)",
-                boxShadow: "0 0 32px rgba(0,212,180,0.12)",
-              }}
-            >
-              <span className="font-display text-xl font-bold text-teal">ES</span>
-            </div>
+            <EsLogo size={56} variant="glow-glass" className="mb-4" />
             <h1
               className="font-display text-2xl font-bold tracking-tight"
               style={{ color: "var(--text)" }}

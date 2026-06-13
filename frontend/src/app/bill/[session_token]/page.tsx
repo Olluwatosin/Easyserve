@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { formatNGN, timeAgo } from "@/lib/utils";
 import { CheckCircle, Clock, Star, ChevronRight } from "lucide-react";
 import toast from "react-hot-toast";
+import { EsLogo } from "@/components/EsLogo";
 import { QRCodeSVG } from "qrcode.react";
 
 const STATUS_COLOR: Record<string, string> = {
@@ -124,17 +125,7 @@ export default function BillPage({
           }}
         />
         <div className="relative z-10 px-5 py-6">
-          {/* ES badge */}
-          <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center font-display font-bold text-sm mb-4"
-            style={{
-              background: "linear-gradient(135deg, #00D4B4 0%, #00906B 100%)",
-              color: "#080D14",
-              boxShadow: "0 0 20px rgba(0,212,180,0.3)",
-            }}
-          >
-            ES
-          </div>
+          <EsLogo size={36} className="mb-4" />
           <p
             className="font-display text-2xl font-bold"
             style={{ color: "var(--text)" }}
