@@ -13,6 +13,14 @@ def _owner(db=Depends(get_db)):
     return require_roles("owner")
 
 
+@router.get("/tonight")
+async def tonight(
+    current_user: User = Depends(require_roles("owner")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await analytics_service.get_tonight_summary(db, current_user.venue_id)
+
+
 @router.get("/summary")
 async def summary(
     current_user: User = Depends(require_roles("owner")),

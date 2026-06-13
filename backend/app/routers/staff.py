@@ -8,6 +8,7 @@ from app.database import get_db
 from app.dependencies import require_roles
 from app.models.user import User
 from app.schemas.auth import UserResponse
+from app.schemas.auth import SetPinRequest
 from app.utils.security import hash_password
 
 router = APIRouter(prefix="/staff", tags=["staff"])
@@ -61,6 +62,26 @@ async def create_staff(
     await db.commit()
     await db.refresh(user)
     return user
+
+
+@router.patch("/{user_id}/pin", status_code=204)
+async def set_staff_pin(
+    user_id: str,
+    req: SetPinRequest,
+    current_user: User = Depends(require_roles("owner")),
+    db: AsyncSession = Depends(get_db),
+):
+    from fastapi import HTTPException
+    if len(req.pin) != 4 or not req.pin.isdigit():
+        raise HTTPException(status_code=400, detail="PIN must be exactly 4 digits")
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.venue_id == current_user.venue_id)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+    user.pin_hash = hash_password(req.pin)
+    await db.commit()
 
 
 @router.delete("/{user_id}", status_code=204)

@@ -12,6 +12,7 @@ import {
   Settings,
   LogOut,
   ShoppingBag,
+  Moon,
 } from "lucide-react";
 import AuthGuard from "@/components/AuthGuard";
 import { useAuthStore } from "@/stores/auth";
@@ -19,6 +20,7 @@ import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/owner", label: "Overview", icon: LayoutDashboard, exact: true },
+  { href: "/owner/tonight", label: "Tonight", icon: Moon },
   { href: "/owner/orders", label: "Orders", icon: ShoppingBag },
   { href: "/owner/tables", label: "Tables", icon: Table2 },
   { href: "/owner/menu", label: "Menu", icon: UtensilsCrossed },

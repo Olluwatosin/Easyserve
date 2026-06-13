@@ -4,7 +4,7 @@ from sqlalchemy import select
 
 from app.models.user import User
 from app.models.venue import Venue
-from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse
+from app.schemas.auth import RegisterRequest, LoginRequest, PinLoginRequest, TokenResponse
 from app.utils.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
 from app.utils.helpers import slugify, new_uuid
 
@@ -67,6 +67,30 @@ async def login(db: AsyncSession, req: LoginRequest) -> TokenResponse:
         access_token=create_access_token(token_data),
         refresh_token=create_refresh_token(token_data),
     )
+
+
+async def pin_login(db: AsyncSession, req: PinLoginRequest) -> TokenResponse:
+    result = await db.execute(select(Venue).where(Venue.slug == req.venue_slug, Venue.is_active == True))
+    venue = result.scalar_one_or_none()
+    if not venue:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    result = await db.execute(
+        select(User).where(
+            User.venue_id == venue.id,
+            User.is_active == True,
+            User.pin_hash.isnot(None),
+        )
+    )
+    for user in result.scalars().all():
+        if verify_password(req.pin, user.pin_hash):
+            token_data = {"sub": user.id, "venue_id": user.venue_id, "role": user.role}
+            return TokenResponse(
+                access_token=create_access_token(token_data),
+                refresh_token=create_refresh_token(token_data),
+            )
+
+    raise HTTPException(status_code=401, detail="Invalid credentials")
 
 
 async def refresh(db: AsyncSession, refresh_token: str) -> TokenResponse:

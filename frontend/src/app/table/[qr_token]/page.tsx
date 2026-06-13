@@ -128,6 +128,7 @@ export default function CustomerMenuPage({
   const [cartOpen, setCartOpen] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
   const [placing, setPlacing] = useState(false);
+  const [orderSent, setOrderSent] = useState(false);
   const { cart, addToCart, updateQuantity, clearCart } = useOrderStore();
   const router = useRouter();
   const sessionToken = useRef(getOrCreateSession());
@@ -150,7 +151,7 @@ export default function CustomerMenuPage({
     if (cart.length === 0) return;
     setPlacing(true);
     try {
-      const { data } = await api.post(`/customer/orders/${qr_token}`, {
+      await api.post(`/customer/orders/${qr_token}`, {
         session_token: sessionToken.current,
         items: cart.map((c) => ({
           menu_item_id: c.menu_item_id,
@@ -159,9 +160,7 @@ export default function CustomerMenuPage({
         })),
       });
       clearCart();
-      setCartOpen(false);
-      toast.success("Order placed!");
-      router.push(`/bill/${data.session_token}`);
+      setOrderSent(true);
     } catch (err: unknown) {
       const msg =
         (err as { response?: { data?: { detail?: string } } })?.response?.data
@@ -549,33 +548,62 @@ export default function CustomerMenuPage({
             </div>
 
             {/* Total + CTA */}
-            <div className="border-t border-border pt-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-sm" style={{ color: "var(--muted)" }}>
-                  Total
-                </span>
-                <span className="font-display text-2xl font-bold gradient-text">
-                  {formatNGN(cartTotal)}
-                </span>
+            {orderSent ? (
+              <div className="border-t border-border pt-5 space-y-3">
+                <div
+                  className="rounded-2xl p-4 text-center"
+                  style={{ background: "rgba(0,212,180,0.07)", border: "1px solid rgba(0,212,180,0.18)" }}
+                >
+                  <p className="text-lg mb-0.5">🎉</p>
+                  <p className="font-semibold text-sm" style={{ color: "var(--teal)" }}>
+                    Order sent to kitchen!
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>
+                    Want to add more items?
+                  </p>
+                </div>
+                <button
+                  onClick={() => { setOrderSent(false); setCartOpen(false); }}
+                  className="btn-teal w-full"
+                >
+                  Add More Items
+                </button>
+                <button
+                  onClick={() => router.push(`/bill/${sessionToken.current}`)}
+                  className="btn-outline w-full"
+                >
+                  View My Bill
+                </button>
               </div>
-              <button
-                onClick={placeOrder}
-                disabled={placing}
-                className="btn-teal w-full"
-              >
-                {placing ? (
-                  <>
-                    <span
-                      className="w-4 h-4 border-2 border-bg/30 border-t-bg rounded-full"
-                      style={{ animation: "spin-custom 0.7s linear infinite" }}
-                    />
-                    Placing order…
-                  </>
-                ) : (
-                  "Place Order"
-                )}
-              </button>
-            </div>
+            ) : (
+              <div className="border-t border-border pt-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm" style={{ color: "var(--muted)" }}>
+                    Total
+                  </span>
+                  <span className="font-display text-2xl font-bold gradient-text">
+                    {formatNGN(cartTotal)}
+                  </span>
+                </div>
+                <button
+                  onClick={placeOrder}
+                  disabled={placing}
+                  className="btn-teal w-full"
+                >
+                  {placing ? (
+                    <>
+                      <span
+                        className="w-4 h-4 border-2 border-bg/30 border-t-bg rounded-full"
+                        style={{ animation: "spin-custom 0.7s linear infinite" }}
+                      />
+                      Placing order…
+                    </>
+                  ) : (
+                    "Place Order"
+                  )}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

@@ -48,6 +48,61 @@ async def get_summary(db: AsyncSession, venue_id: str) -> dict:
     }
 
 
+async def get_tonight_summary(db: AsyncSession, venue_id: str) -> dict:
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    rev = await db.execute(
+        select(func.coalesce(func.sum(Payment.amount), 0))
+        .where(Payment.venue_id == venue_id, Payment.created_at >= today_start)
+    )
+    today_revenue = float(rev.scalar())
+
+    total_orders_res = await db.execute(
+        select(func.count(Order.id))
+        .where(Order.venue_id == venue_id, Order.created_at >= today_start)
+    )
+    total_orders = int(total_orders_res.scalar())
+
+    paid_res = await db.execute(
+        select(func.count(Order.id))
+        .where(Order.venue_id == venue_id, Order.created_at >= today_start, Order.status == "paid")
+    )
+    paid_orders = int(paid_res.scalar())
+
+    tables_res = await db.execute(
+        select(func.count(func.distinct(Order.table_id)))
+        .where(Order.venue_id == venue_id, Order.created_at >= today_start, Order.status == "paid")
+    )
+    tables_served = int(tables_res.scalar())
+
+    top_res = await db.execute(
+        select(
+            OrderItem.name,
+            OrderItem.item_type,
+            func.sum(OrderItem.quantity).label("qty"),
+            func.sum(OrderItem.price * OrderItem.quantity).label("rev"),
+        )
+        .join(Order, Order.id == OrderItem.order_id)
+        .where(Order.venue_id == venue_id, Order.created_at >= today_start)
+        .group_by(OrderItem.name, OrderItem.item_type)
+        .order_by(func.sum(OrderItem.price * OrderItem.quantity).desc())
+        .limit(5)
+    )
+    top_items = [
+        {"name": r.name, "item_type": r.item_type, "qty": int(r.qty), "revenue": float(r.rev)}
+        for r in top_res.all()
+    ]
+
+    return {
+        "today_revenue": today_revenue,
+        "total_orders": total_orders,
+        "paid_orders": paid_orders,
+        "tables_served": tables_served,
+        "avg_order_value": round(today_revenue / paid_orders, 2) if paid_orders > 0 else 0.0,
+        "top_items": top_items,
+    }
+
+
 async def get_peak_hours(db: AsyncSession, venue_id: str) -> list[dict]:
     seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
     result = await db.execute(

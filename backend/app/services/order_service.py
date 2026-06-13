@@ -63,33 +63,51 @@ async def place_order(db: AsyncSession, qr_token: str, req: PlaceOrderRequest) -
         total += effective_price * inp.quantity
         order_items.append(order_item)
 
-    order = Order(
-        id=str(uuid.uuid4()),
-        venue_id=venue_id,
-        table_id=table.id,
-        assigned_to=table.assigned_attendant_id,
-        session_token=session_token,
-        order_source=req.order_source,
-        total_amount=round(total, 2),
-    )
-    db.add(order)
-    await db.flush()
+    # Check for an existing open order on this session (add-to-order)
+    existing_order = None
+    if req.session_token:
+        res = await db.execute(
+            select(Order).where(
+                Order.session_token == session_token,
+                Order.status.in_(["open", "partially_served"]),
+            )
+        )
+        existing_order = res.scalar_one_or_none()
 
-    for oi in order_items:
-        oi.order_id = order.id
-        db.add(oi)
+    if existing_order:
+        for oi in order_items:
+            oi.order_id = existing_order.id
+            db.add(oi)
+        existing_order.total_amount = round(float(existing_order.total_amount) + total, 2)
+        await db.commit()
+        result = await db.execute(
+            select(Order).where(Order.id == existing_order.id).options(selectinload(Order.items))
+        )
+        order = result.scalar_one()
+    else:
+        order = Order(
+            id=str(uuid.uuid4()),
+            venue_id=venue_id,
+            table_id=table.id,
+            assigned_to=table.assigned_attendant_id,
+            session_token=session_token,
+            order_source=req.order_source,
+            total_amount=round(total, 2),
+        )
+        db.add(order)
+        await db.flush()
 
-    await db.commit()
+        for oi in order_items:
+            oi.order_id = order.id
+            db.add(oi)
 
-    # Reload with items for WS payload
-    result = await db.execute(
-        select(Order).where(Order.id == order.id).options(selectinload(Order.items))
-    )
-    order = result.scalar_one()
+        await db.commit()
+        result = await db.execute(
+            select(Order).where(Order.id == order.id).options(selectinload(Order.items))
+        )
+        order = result.scalar_one()
 
-    # Fire parallel routing
     await route_new_order(venue_id, order, table.label, attendant_name)
-
     return order
 
 

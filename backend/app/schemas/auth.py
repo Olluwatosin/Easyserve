@@ -1,6 +1,15 @@
 from pydantic import BaseModel, EmailStr
 
 
+class PinLoginRequest(BaseModel):
+    venue_slug: str
+    pin: str
+
+
+class SetPinRequest(BaseModel):
+    pin: str
+
+
 class RegisterRequest(BaseModel):
     venue_name: str
     venue_city: str | None = None
