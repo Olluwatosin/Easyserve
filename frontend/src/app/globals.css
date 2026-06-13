@@ -206,3 +206,35 @@ h1, h2, h3, h4, h5, h6 {
 .animate-fade-in { animation: fade-in 0.3s ease-out; }
 .animate-pulse-teal { animation: pulse-teal 2s infinite; }
 .animate-status-blink { animation: status-blink 1.8s ease-in-out infinite; }
+
+/* ── Float ──────────────────────────────────────── */
+@keyframes float-up {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-8px); }
+}
+.animate-float { animation: float-up 4s ease-in-out infinite; }
+
+/* ── Scan line ──────────────────────────────────── */
+@keyframes scan-line-move {
+  0%, 100% { top: 8px; opacity: 1; }
+  50% { top: calc(100% - 10px); opacity: 0.55; }
+}
+.animate-scan-line { animation: scan-line-move 2s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+
+/* ── Neon glow pulse ────────────────────────────── */
+@keyframes glow-pulse-teal-strong {
+  0%, 100% { box-shadow: 0 0 20px rgba(0,212,180,0.35), 0 0 0 1px rgba(0,212,180,0.2); }
+  50%       { box-shadow: 0 0 55px rgba(0,212,180,0.65), 0 0 0 1px rgba(0,212,180,0.4); }
+}
+@keyframes glow-pulse-red-strong {
+  0%, 100% { box-shadow: 0 0 20px rgba(239,68,68,0.35); }
+  50%       { box-shadow: 0 0 55px rgba(239,68,68,0.65); }
+}
+.animate-glow-teal { animation: glow-pulse-teal-strong 2.2s ease-in-out infinite; }
+.animate-glow-red  { animation: glow-pulse-red-strong  2.2s ease-in-out infinite; }
+
+/* ── Scanner corner brackets ────────────────────── */
+.corner-tl { position: absolute; top: 0; left: 0; width: 28px; height: 28px; border-top: 3px solid #00D4B4; border-left: 3px solid #00D4B4; border-radius: 3px 0 0 0; }
+.corner-tr { position: absolute; top: 0; right: 0; width: 28px; height: 28px; border-top: 3px solid #00D4B4; border-right: 3px solid #00D4B4; border-radius: 0 3px 0 0; }
+.corner-bl { position: absolute; bottom: 0; left: 0; width: 28px; height: 28px; border-bottom: 3px solid #00D4B4; border-left: 3px solid #00D4B4; border-radius: 0 0 0 3px; }
+.corner-br { position: absolute; bottom: 0; right: 0; width: 28px; height: 28px; border-bottom: 3px solid #00D4B4; border-right: 3px solid #00D4B4; border-radius: 0 0 3px 0; }
