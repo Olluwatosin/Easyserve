@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { ConnectionBanner, useReconnectingWS } from "@/lib/ws";
 import { useAuthStore } from "@/stores/auth";
 import AuthGuard from "@/components/AuthGuard";
 import toast from "react-hot-toast";
@@ -19,6 +20,7 @@ interface OrderItem {
 interface DisplayOrder {
   id: string;
   created_at: string;
+  table_label: string | null;
   items: OrderItem[];
 }
 
@@ -77,8 +79,6 @@ const URGENCY_TOP: Record<string, string> = {
 function KitchenContent() {
   const { user } = useAuthStore();
   const [orders, setOrders] = useState<DisplayOrder[]>([]);
-  const wsRef = useRef<WebSocket | null>(null);
-
   function loadOrders() {
     api
       .get("/orders?station=kitchen")
@@ -88,20 +88,26 @@ function KitchenContent() {
 
   useEffect(() => {
     loadOrders();
-    const token = localStorage.getItem("access_token");
-    const ws = new WebSocket(
-      `${process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000"}/ws/kitchen/${user!.venue_id}?token=${token}`
-    );
-    wsRef.current = ws;
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
+  }, []);
+
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  const wsStatus = useReconnectingWS(
+    user && token
+      ? `${process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000"}/ws/kitchen/${user.venue_id}?token=${token}`
+      : null,
+    (msg) => {
       if (msg.event === "new_order_kitchen") {
         loadOrders();
         toast("New food order!", { icon: "🍽️" });
       }
-    };
-    return () => ws.close();
-  }, []);
+    }
+  );
+
+  async function markPreparing(itemId: string) {
+    await api.patch(`/orders/items/${itemId}/status`, { status: "preparing" });
+    loadOrders();
+    toast("Accepted — cooking started", { icon: "🔥" });
+  }
 
   async function markReady(itemId: string) {
     await api.patch(`/orders/items/${itemId}/status`, { status: "ready" });
@@ -125,6 +131,7 @@ function KitchenContent() {
 
   return (
     <div className="min-h-screen bg-bg">
+      <ConnectionBanner status={wsStatus} />
       {/* Header */}
       <header
         className="border-b border-border px-6 py-4 flex items-center justify-between sticky top-0 z-10"
@@ -230,6 +237,17 @@ function KitchenContent() {
                         <span className="font-mono text-xs px-2 py-0.5 rounded-full bg-bg-hover" style={{ color: "var(--muted)" }}>
                           #{order.id.slice(-4).toUpperCase()}
                         </span>
+                        {order.table_label && (
+                          <span
+                            className="text-xs font-bold px-2 py-0.5 rounded-full"
+                            style={{
+                              background: "rgba(255,149,0,0.15)",
+                              color: "var(--amber)",
+                            }}
+                          >
+                            {order.table_label}
+                          </span>
+                        )}
                       </div>
                       <ElapsedTimer createdAt={order.created_at} />
                     </div>
@@ -276,6 +294,28 @@ function KitchenContent() {
 
                           <div className="flex gap-2">
                             {item.status === "pending" && (
+                              <button
+                                onClick={() => markPreparing(item.id)}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all duration-150"
+                                style={{
+                                  background: "rgba(255,149,0,0.12)",
+                                  border: "1px solid rgba(255,149,0,0.2)",
+                                  color: "var(--amber)",
+                                }}
+                                onMouseEnter={(e) => {
+                                  (e.currentTarget as HTMLButtonElement).style.background =
+                                    "rgba(255,149,0,0.2)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  (e.currentTarget as HTMLButtonElement).style.background =
+                                    "rgba(255,149,0,0.12)";
+                                }}
+                              >
+                                <CheckCircle size={13} />
+                                Start Cooking
+                              </button>
+                            )}
+                            {item.status === "preparing" && (
                               <button
                                 onClick={() => markReady(item.id)}
                                 className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl text-xs font-semibold transition-all duration-150"

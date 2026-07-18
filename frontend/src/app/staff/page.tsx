@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { ConnectionBanner, useReconnectingWS } from "@/lib/ws";
 import { useAuthStore } from "@/stores/auth";
 import AuthGuard from "@/components/AuthGuard";
 import { formatNGN, timeAgo } from "@/lib/utils";
@@ -30,6 +31,7 @@ interface Order {
   id: string;
   status: string;
   table_id: string | null;
+  table_label: string | null;
   items: OrderItem[];
   created_at: string;
 }
@@ -57,7 +59,6 @@ function StaffContent() {
     message: string;
     type: "bar" | "kitchen";
   } | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
   const router = useRouter();
 
   function loadOrders() {
@@ -77,23 +78,26 @@ function StaffContent() {
   useEffect(() => {
     loadOrders();
     loadAlerts();
-    const token = localStorage.getItem("access_token");
-    const ws = new WebSocket(
-      `${process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000"}/ws/${user!.venue_id}?token=${token}`
-    );
-    wsRef.current = ws;
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
+  }, []);
+
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  const wsStatus = useReconnectingWS(
+    user && token
+      ? `${process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000"}/ws/${user.venue_id}?token=${token}`
+      : null,
+    (msg) => {
       if (msg.event === "new_order_attendant") {
         loadOrders();
         toast("New order arrived", { icon: "🛎️" });
       }
       if (msg.event === "bar_order_ready") {
-        setBuzz({ message: "Drinks ready at bar!", type: "bar" });
+        const table = msg.data?.table_number ? ` — Table ${msg.data.table_number}` : "";
+        setBuzz({ message: `🍸 Drinks ready${table}`, type: "bar" });
         loadOrders();
       }
       if (msg.event === "kitchen_order_ready") {
-        setBuzz({ message: "Food ready at kitchen!", type: "kitchen" });
+        const table = msg.data?.table_number ? ` — Table ${msg.data.table_number}` : "";
+        setBuzz({ message: `🍽️ Food ready${table}`, type: "kitchen" });
         loadOrders();
       }
       if (msg.event === "new_alert") {
@@ -103,9 +107,14 @@ function StaffContent() {
       if (msg.event === "alert_resolved") {
         loadAlerts();
       }
-    };
-    return () => ws.close();
-  }, []);
+    }
+  );
+
+  async function markDelivered(itemId: string) {
+    await api.patch(`/orders/items/${itemId}/status`, { status: "delivered" });
+    loadOrders();
+    toast.success("Delivered!");
+  }
 
   async function ackAlert(id: string) {
     await api.patch(`/alerts/${id}/acknowledge`);
@@ -127,6 +136,7 @@ function StaffContent() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+      <ConnectionBanner status={wsStatus} />
 
       {/* ── Buzz banner ── */}
       {buzz && (
@@ -333,6 +343,18 @@ function StaffContent() {
                         >
                           {order.status.replace(/_/g, " ")}
                         </span>
+                        {order.table_label && (
+                          <span
+                            className="text-xs font-bold px-2 py-0.5 rounded-full"
+                            style={{
+                              background: "rgba(0,212,180,0.1)",
+                              border: "1px solid rgba(0,212,180,0.25)",
+                              color: "var(--teal)",
+                            }}
+                          >
+                            {order.table_label}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-3">
                         <span className="text-xs" style={{ color: "var(--muted)" }}>
@@ -353,27 +375,46 @@ function StaffContent() {
                         const itemColor =
                           ITEM_STATUS_COLOR[item.status] ?? "#6B7A99";
                         return (
-                          <div
-                            key={item.id}
-                            className="flex items-center justify-between text-xs"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span>
-                                {item.item_type === "drink" ? "🍸" : "🍽️"}
-                              </span>
-                              <span style={{ color: "var(--text-soft)" }}>
-                                {item.quantity}× {item.name}
+                          <div key={item.id}>
+                            <div className="flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-2">
+                                <span>
+                                  {item.item_type === "drink" ? "🍸" : "🍽️"}
+                                </span>
+                                <span style={{ color: "var(--text-soft)" }}>
+                                  {item.quantity}× {item.name}
+                                </span>
+                              </div>
+                              <span
+                                className="px-1.5 py-0.5 rounded-md capitalize font-medium"
+                                style={{
+                                  background: `${itemColor}12`,
+                                  color: itemColor,
+                                }}
+                              >
+                                {item.status}
                               </span>
                             </div>
-                            <span
-                              className="px-1.5 py-0.5 rounded-md capitalize font-medium"
-                              style={{
-                                background: `${itemColor}12`,
-                                color: itemColor,
-                              }}
-                            >
-                              {item.status}
-                            </span>
+                            {item.status === "ready" && (
+                              <button
+                                onClick={() => markDelivered(item.id)}
+                                className="mt-1.5 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-xl text-xs font-semibold transition-all"
+                                style={{
+                                  background: "rgba(0,212,180,0.08)",
+                                  border: "1px solid rgba(0,212,180,0.25)",
+                                  color: "var(--teal)",
+                                }}
+                                onMouseEnter={(e) => {
+                                  (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,212,180,0.15)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  (e.currentTarget as HTMLButtonElement).style.background = "rgba(0,212,180,0.08)";
+                                }}
+                              >
+                                <CheckCircle size={12} />
+                                Mark Delivered
+                              </button>
+                            )}
                           </div>
                         );
                       })}

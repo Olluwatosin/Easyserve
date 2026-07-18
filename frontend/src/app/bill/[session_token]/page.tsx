@@ -1,9 +1,10 @@
 "use client";
 
-import { use, useEffect, useState, useRef } from "react";
-import { api } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { publicApi as api } from "@/lib/publicApi";
+import { useReconnectingWS } from "@/lib/ws";
 import { formatNGN, timeAgo } from "@/lib/utils";
-import { CheckCircle, Clock, Star, ChevronRight } from "lucide-react";
+import { CheckCircle, Clock, Star, ChevronRight, MessageCircle, Users, CreditCard } from "lucide-react";
 import toast from "react-hot-toast";
 import { EsLogo } from "@/components/EsLogo";
 import { QRCodeSVG } from "qrcode.react";
@@ -27,6 +28,10 @@ const STATUS_LABEL: Record<string, string> = {
 interface OrderData {
   id: string;
   status: string;
+  total_amount: number;
+  service_charge: number;
+  vat_amount: number;
+  grand_total: number;
   items: Array<{
     id: string;
     name: string;
@@ -47,15 +52,16 @@ interface ExitPass {
 export default function BillPage({
   params,
 }: {
-  params: Promise<{ session_token: string }>;
+  params: { session_token: string };
 }) {
-  const { session_token } = use(params);
+  const { session_token } = params;
   const [orders, setOrders] = useState<OrderData[]>([]);
   const [exitPass, setExitPass] = useState<ExitPass | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
-  const wsRef = useRef<WebSocket | null>(null);
+  const [paying, setPaying] = useState(false);
+  const [splitBy, setSplitBy] = useState(1);
 
   function load() {
     api.get(`/customer/orders/${session_token}`).then((r) => setOrders(r.data));
@@ -67,12 +73,11 @@ export default function BillPage({
 
   useEffect(() => {
     load();
-    const ws = new WebSocket(
-      `${process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000"}/ws/customer/${session_token}`
-    );
-    wsRef.current = ws;
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
+  }, [session_token]);
+
+  useReconnectingWS(
+    `${process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000"}/ws/customer/${session_token}`,
+    (msg) => {
       if (
         msg.event === "payment_confirmed" ||
         msg.event === "exit_pass_ready"
@@ -80,15 +85,46 @@ export default function BillPage({
         load();
         toast.success("Payment confirmed! Your exit pass is ready.");
       }
-    };
-    return () => ws.close();
-  }, [session_token]);
+    }
+  );
 
-  const total = orders
-    .flatMap((o) => o.items)
-    .reduce((s, i) => s + i.price * i.quantity, 0);
+  const subtotal = orders.reduce((s, o) => s + Number(o.total_amount ?? 0), 0);
+  const serviceCharge = orders.reduce((s, o) => s + Number(o.service_charge ?? 0), 0);
+  const vat = orders.reduce((s, o) => s + Number(o.vat_amount ?? 0), 0);
+  const total = subtotal + serviceCharge + vat;
   const allPaid =
     orders.length > 0 && orders.every((o) => o.status === "paid");
+  const unpaidOrder = orders.find((o) => o.status !== "paid");
+
+  async function payOnline() {
+    if (!unpaidOrder) return;
+    setPaying(true);
+    try {
+      const { data } = await api.post(`/customer/pay/${session_token}`, {
+        order_id: unpaidOrder.id,
+      });
+      window.location.href = data.authorization_url;
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "Online payment unavailable — please see the cashier";
+      toast.error(msg);
+      setPaying(false);
+    }
+  }
+
+  function whatsAppReceipt() {
+    const lines = orders.flatMap((o) =>
+      o.items.map((i) => `${i.quantity}x ${i.name} — ${formatNGN(i.price * i.quantity)}`)
+    );
+    const text = encodeURIComponent(
+      `🧾 My bill\n${lines.join("\n")}\n\nSubtotal: ${formatNGN(subtotal)}` +
+        (serviceCharge > 0 ? `\nService: ${formatNGN(serviceCharge)}` : "") +
+        (vat > 0 ? `\nVAT: ${formatNGN(vat)}` : "") +
+        `\nTotal: ${formatNGN(total)}\n\nvia EasyServe`
+    );
+    window.open(`https://wa.me/?text=${text}`, "_blank");
+  }
 
   async function submitFeedback() {
     if (!rating) return;
@@ -116,12 +152,12 @@ export default function BillPage({
           borderBottom: "1px solid #1E2D42",
         }}
       >
-        {/* Subtle food/cocktail strip */}
+        {/* Subtle gradient sheen — no remote images, kind to mobile data */}
         <div
-          className="absolute inset-0 bg-cover bg-center opacity-10"
+          className="absolute inset-0 opacity-30"
           style={{
-            backgroundImage:
-              "url('https://images.unsplash.com/photo-1414235077428-338989a2e8c0?auto=format&fit=crop&w=800&q=60')",
+            background:
+              "radial-gradient(ellipse at top right, rgba(0,212,180,0.15) 0%, transparent 60%)",
           }}
         />
         <div className="relative z-10 px-5 py-6">
@@ -206,46 +242,130 @@ export default function BillPage({
           </div>
         ))}
 
-        {/* ── Total ── */}
+        {/* ── Bill summary ── */}
         {orders.length > 0 && (
           <div
-            className="rounded-2xl px-5 py-4 flex items-center justify-between"
+            className="rounded-2xl px-5 py-4 space-y-2"
             style={{
               background:
                 "linear-gradient(135deg, rgba(0,212,180,0.06) 0%, rgba(0,144,107,0.03) 100%)",
               border: "1px solid rgba(0,212,180,0.2)",
             }}
           >
-            <span
-              className="font-semibold text-sm"
-              style={{ color: "var(--muted)" }}
+            <div className="flex items-center justify-between text-sm">
+              <span style={{ color: "var(--muted)" }}>Subtotal</span>
+              <span style={{ color: "var(--text-soft)" }}>{formatNGN(subtotal)}</span>
+            </div>
+            {serviceCharge > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span style={{ color: "var(--muted)" }}>Service charge</span>
+                <span style={{ color: "var(--text-soft)" }}>{formatNGN(serviceCharge)}</span>
+              </div>
+            )}
+            {vat > 0 && (
+              <div className="flex items-center justify-between text-sm">
+                <span style={{ color: "var(--muted)" }}>VAT</span>
+                <span style={{ color: "var(--text-soft)" }}>{formatNGN(vat)}</span>
+              </div>
+            )}
+            <div
+              className="flex items-center justify-between pt-2"
+              style={{ borderTop: "1px solid rgba(0,212,180,0.15)" }}
             >
-              Total
-            </span>
-            <span className="font-display text-3xl font-bold gradient-text">
-              {formatNGN(total)}
-            </span>
+              <span className="font-semibold text-sm" style={{ color: "var(--muted)" }}>
+                Total
+              </span>
+              <span className="font-display text-3xl font-bold gradient-text">
+                {formatNGN(total)}
+              </span>
+            </div>
           </div>
         )}
 
-        {/* ── Awaiting payment notice ── */}
-        {!allPaid && orders.length > 0 && (
+        {/* ── Split between friends ── */}
+        {orders.length > 0 && !allPaid && (
           <div
-            className="rounded-2xl px-5 py-4 flex items-center gap-3"
+            className="rounded-2xl px-5 py-4"
+            style={{ background: "#111827", border: "1px solid #1E2D42" }}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users size={16} style={{ color: "var(--muted)" }} />
+                <span className="text-sm" style={{ color: "var(--text-soft)" }}>
+                  Split between
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setSplitBy(Math.max(1, splitBy - 1))}
+                  className="w-8 h-8 rounded-lg text-lg font-bold"
+                  style={{ background: "#1A2535", color: "var(--text)" }}
+                >
+                  −
+                </button>
+                <span className="font-semibold tabular-nums w-6 text-center" style={{ color: "var(--text)" }}>
+                  {splitBy}
+                </span>
+                <button
+                  onClick={() => setSplitBy(Math.min(20, splitBy + 1))}
+                  className="w-8 h-8 rounded-lg text-lg font-bold"
+                  style={{ background: "#1A2535", color: "var(--text)" }}
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            {splitBy > 1 && (
+              <p className="text-sm mt-3 text-center" style={{ color: "var(--teal)" }}>
+                {formatNGN(Math.ceil(total / splitBy))} each
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* ── Payment actions ── */}
+        {!allPaid && orders.length > 0 && (
+          <div className="space-y-3">
+            <button
+              onClick={payOnline}
+              disabled={paying || !unpaidOrder}
+              className="btn-teal w-full flex items-center justify-center gap-2"
+            >
+              <CreditCard size={16} />
+              {paying ? "Opening secure checkout…" : "Pay Online — Transfer / Card / USSD"}
+            </button>
+            <div
+              className="rounded-2xl px-5 py-4 flex items-center gap-3"
+              style={{
+                background: "rgba(255,149,0,0.05)",
+                border: "1px solid rgba(255,149,0,0.2)",
+              }}
+            >
+              <Clock
+                size={16}
+                style={{ color: "var(--amber)", flexShrink: 0 }}
+              />
+              <p className="text-sm" style={{ color: "var(--text-soft)" }}>
+                Or pay cash / POS at the cashier to collect your exit pass.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* ── WhatsApp receipt ── */}
+        {orders.length > 0 && (
+          <button
+            onClick={whatsAppReceipt}
+            className="w-full rounded-2xl px-5 py-4 flex items-center justify-center gap-2 text-sm font-medium"
             style={{
-              background: "rgba(255,149,0,0.05)",
-              border: "1px solid rgba(255,149,0,0.2)",
+              background: "rgba(37,211,102,0.06)",
+              border: "1px solid rgba(37,211,102,0.25)",
+              color: "#25D366",
             }}
           >
-            <Clock
-              size={16}
-              style={{ color: "var(--amber)", flexShrink: 0 }}
-            />
-            <p className="text-sm" style={{ color: "var(--text-soft)" }}>
-              Visit the cashier to complete your payment and collect your exit
-              pass.
-            </p>
-          </div>
+            <MessageCircle size={16} />
+            Send receipt to WhatsApp
+          </button>
         )}
 
         {/* ── Exit Pass ── */}

@@ -10,9 +10,10 @@ from app.models.payment import Payment
 from app.models.exit_pass import ExitPass
 from app.models.alert import Alert
 from app.models.feedback import Feedback
+from app.models.audit_log import AuditLog
 
 __all__ = [
     "Venue", "User", "Table", "MenuCategory", "MenuItem",
     "Promo", "Order", "OrderItem", "Payment", "ExitPass",
-    "Alert", "Feedback",
+    "Alert", "Feedback", "AuditLog",
 ]

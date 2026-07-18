@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { ConnectionBanner, useReconnectingWS } from "@/lib/ws";
 import { useAuthStore } from "@/stores/auth";
 import AuthGuard from "@/components/AuthGuard";
 import { timeAgo } from "@/lib/utils";
@@ -23,6 +24,7 @@ interface OrderItem {
 interface DisplayOrder {
   id: string;
   created_at: string;
+  table_label: string | null;
   items: OrderItem[];
 }
 
@@ -36,7 +38,6 @@ const STATUS_COLOR: Record<string, string> = {
 function BarContent() {
   const { user, logout } = useAuthStore();
   const [orders, setOrders] = useState<DisplayOrder[]>([]);
-  const wsRef = useRef<WebSocket | null>(null);
   const router = useRouter();
 
   function loadOrders() {
@@ -48,25 +49,31 @@ function BarContent() {
 
   useEffect(() => {
     loadOrders();
-    const token = localStorage.getItem("access_token");
-    const ws = new WebSocket(
-      `${process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000"}/ws/bar/${user!.venue_id}?token=${token}`
-    );
-    wsRef.current = ws;
-    ws.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
+  }, []);
+
+  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  const wsStatus = useReconnectingWS(
+    user && token
+      ? `${process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000"}/ws/bar/${user.venue_id}?token=${token}`
+      : null,
+    (msg) => {
       if (msg.event === "new_order_bar") {
         loadOrders();
         toast("New drink order!", { icon: "🍹" });
       }
-    };
-    return () => ws.close();
-  }, []);
+    }
+  );
+
+  async function markPreparing(itemId: string) {
+    await api.patch(`/orders/items/${itemId}/status`, { status: "preparing" });
+    loadOrders();
+    toast("Accepted — now preparing", { icon: "🍸" });
+  }
 
   async function markReady(itemId: string) {
     await api.patch(`/orders/items/${itemId}/status`, { status: "ready" });
     loadOrders();
-    toast.success("Drink ready to serve!");
+    toast.success("Drink ready — attendant notified!");
   }
 
   async function markDelivered(itemId: string) {
@@ -80,6 +87,7 @@ function BarContent() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+      <ConnectionBanner status={wsStatus} />
 
       {/* ── Header ── */}
       <header
@@ -90,12 +98,12 @@ function BarContent() {
           backdropFilter: "blur(14px)",
         }}
       >
-        {/* Subtle bar image strip behind header */}
+        {/* Subtle ambient glow behind header — no remote image */}
         <div
-          className="absolute inset-0 bg-cover bg-center opacity-10"
+          className="absolute inset-0 opacity-40"
           style={{
-            backgroundImage:
-              "url('https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?auto=format&fit=crop&w=1200&q=60')",
+            background:
+              "radial-gradient(ellipse at 15% 50%, rgba(0,212,180,0.12) 0%, transparent 50%)",
           }}
         />
 
@@ -224,6 +232,17 @@ function BarContent() {
                       >
                         #{order.id.slice(-6).toUpperCase()}
                       </span>
+                      {order.table_label && (
+                        <span
+                          className="text-xs font-bold px-2 py-0.5 rounded-full"
+                          style={{
+                            background: hasPending ? "rgba(255,149,0,0.15)" : "rgba(0,212,180,0.15)",
+                            color: hasPending ? "var(--amber)" : "var(--teal)",
+                          }}
+                        >
+                          {order.table_label}
+                        </span>
+                      )}
                     </div>
                     <span className="text-xs" style={{ color: "var(--muted)" }}>
                       {timeAgo(order.created_at)}
@@ -272,7 +291,27 @@ function BarContent() {
                             </span>
                           </div>
 
-                          {(item.status === "pending" || item.status === "preparing") && (
+                          {item.status === "pending" && (
+                            <button
+                              onClick={() => markPreparing(item.id)}
+                              className="w-full py-2 rounded-xl text-xs font-bold transition-all"
+                              style={{
+                                background: "rgba(255,149,0,0.1)",
+                                border: "1px solid rgba(255,149,0,0.3)",
+                                color: "var(--amber)",
+                              }}
+                              onMouseEnter={(e) => {
+                                (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,149,0,0.18)";
+                              }}
+                              onMouseLeave={(e) => {
+                                (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,149,0,0.1)";
+                              }}
+                            >
+                              ✓ Accept Order
+                            </button>
+                          )}
+
+                          {item.status === "preparing" && (
                             <button
                               onClick={() => markReady(item.id)}
                               className="w-full py-2 rounded-xl text-xs font-bold transition-all"

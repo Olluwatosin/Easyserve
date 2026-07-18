@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { EsLogo } from "@/components/EsLogo";
 
-const HERO =
-  "https://images.unsplash.com/photo-1559329007-40df8a9345d8?auto=format&fit=crop&w=1400&q=85";
+// Self-hosted gradient backdrop — no third-party image dependency at runtime.
+const HERO_BG =
+  "radial-gradient(ellipse at 25% 25%, rgba(255,149,0,0.12) 0%, transparent 55%), radial-gradient(ellipse at 80% 80%, rgba(0,212,180,0.14) 0%, transparent 50%), linear-gradient(160deg, #14202C 0%, #080D14 65%)";
 
 const FIELDS = [
   { key: "venue_name", label: "Venue Name", type: "text", placeholder: "The Grand Lounge" },
@@ -65,14 +65,7 @@ export default function RegisterPage() {
     <main className="min-h-screen flex bg-bg overflow-hidden">
       {/* ── Left hero panel (desktop only) ── */}
       <div className="hidden lg:flex lg:w-[45%] relative flex-shrink-0">
-        <Image
-          src={HERO}
-          alt="Luxury dining and drinks"
-          fill
-          className="object-cover"
-          priority
-          sizes="45vw"
-        />
+        <div className="absolute inset-0" style={{ background: HERO_BG }} />
         <div
           className="absolute inset-0"
           style={{
@@ -132,23 +125,31 @@ export default function RegisterPage() {
       </div>
 
       {/* ── Right: form panel ── */}
-      <div className="flex-1 relative flex items-center justify-center px-6 py-10">
+      <div className="flex-1 relative flex items-center justify-center px-6 py-10 overflow-hidden">
         {/* Mobile background */}
         <div className="absolute inset-0 lg:hidden overflow-hidden">
-          <Image
-            src={HERO}
-            alt=""
-            fill
-            className="object-cover opacity-20 scale-105 blur-sm"
-            sizes="100vw"
-          />
+          <div className="absolute inset-0" style={{ background: HERO_BG }} />
           <div
             className="absolute inset-0"
-            style={{ background: "rgba(8,13,20,0.88)" }}
+            style={{ background: "rgba(8,13,20,0.7)" }}
           />
         </div>
 
-        <div className="relative w-full max-w-[400px] animate-fade-in">
+        {/* Desktop: same backdrop continues from left panel */}
+        <div
+          className="hidden lg:block absolute inset-0"
+          style={{ background: HERO_BG }}
+        />
+        {/* Dark overlay so form stays readable */}
+        <div
+          className="hidden lg:block absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(8,13,20,0.80) 0%, rgba(8,13,20,0.65) 55%, rgba(8,13,20,0.78) 100%)",
+          }}
+        />
+
+        <div className="relative z-10 w-full max-w-[400px] animate-fade-in">
           {/* Mobile logo */}
           <div className="flex flex-col items-center mb-6 lg:hidden">
             <EsLogo size={56} variant="glow-glass" className="mb-4" />
@@ -170,10 +171,12 @@ export default function RegisterPage() {
             onSubmit={handleSubmit}
             className="rounded-2xl p-6 space-y-4"
             style={{
-              background: "#111827",
-              border: "1px solid #1E2D42",
+              background: "rgba(8,13,20,0.72)",
+              backdropFilter: "blur(22px)",
+              WebkitBackdropFilter: "blur(22px)",
+              border: "1px solid rgba(255,255,255,0.09)",
               boxShadow:
-                "0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.025), inset 0 1px 0 rgba(255,255,255,0.04)",
+                "0 32px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,212,180,0.06), inset 0 1px 0 rgba(255,255,255,0.07)",
             }}
           >
             {FIELDS.map(({ key, label, type, placeholder }) => (

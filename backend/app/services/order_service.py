@@ -9,9 +9,21 @@ from app.models.order_item import OrderItem
 from app.models.menu_item import MenuItem
 from app.models.table import Table
 from app.models.user import User
+from app.models.venue import Venue
 from app.schemas.order import PlaceOrderRequest
 from app.services.routing_service import determine_route, route_new_order
 from app.services.promo_service import get_active_promos, apply_promo
+
+
+def apply_bill_charges(order: Order, venue: Venue) -> None:
+    """Recompute service charge and VAT snapshots from the items subtotal.
+
+    VAT applies to subtotal + service charge (standard Nigerian practice).
+    Call whenever order.total_amount changes.
+    """
+    subtotal = float(order.total_amount)
+    order.service_charge = round(subtotal * float(venue.service_charge_pct) / 100, 2)
+    order.vat_amount = round((subtotal + float(order.service_charge)) * float(venue.vat_pct) / 100, 2)
 
 
 async def place_order(db: AsyncSession, qr_token: str, req: PlaceOrderRequest) -> Order:
@@ -25,6 +37,9 @@ async def place_order(db: AsyncSession, qr_token: str, req: PlaceOrderRequest) -
 
     venue_id = table.venue_id
     session_token = req.session_token or str(uuid.uuid4())
+
+    venue_res = await db.execute(select(Venue).where(Venue.id == venue_id))
+    venue = venue_res.scalar_one()
 
     # Resolve assigned attendant name for WS payload
     attendant_name = None
@@ -69,16 +84,21 @@ async def place_order(db: AsyncSession, qr_token: str, req: PlaceOrderRequest) -
         res = await db.execute(
             select(Order).where(
                 Order.session_token == session_token,
+                Order.venue_id == venue_id,
+                Order.table_id == table.id,
                 Order.status.in_(["open", "partially_served"]),
             )
         )
-        existing_order = res.scalar_one_or_none()
+        existing_order = res.scalars().first()
 
     if existing_order:
         for oi in order_items:
             oi.order_id = existing_order.id
             db.add(oi)
         existing_order.total_amount = round(float(existing_order.total_amount) + total, 2)
+        apply_bill_charges(existing_order, venue)
+        if req.customer_phone and not existing_order.customer_phone:
+            existing_order.customer_phone = req.customer_phone
         await db.commit()
         result = await db.execute(
             select(Order).where(Order.id == existing_order.id).options(selectinload(Order.items))
@@ -93,7 +113,9 @@ async def place_order(db: AsyncSession, qr_token: str, req: PlaceOrderRequest) -
             session_token=session_token,
             order_source=req.order_source,
             total_amount=round(total, 2),
+            customer_phone=req.customer_phone,
         )
+        apply_bill_charges(order, venue)
         db.add(order)
         await db.flush()
 

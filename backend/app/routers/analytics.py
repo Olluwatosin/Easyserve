@@ -9,10 +9,6 @@ from app.services import analytics_service
 router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
-def _owner(db=Depends(get_db)):
-    return require_roles("owner")
-
-
 @router.get("/tonight")
 async def tonight(
     current_user: User = Depends(require_roles("owner")),
@@ -75,6 +71,22 @@ async def inventory_alerts(
     db: AsyncSession = Depends(get_db),
 ):
     return await analytics_service.get_inventory_alerts(db, current_user.venue_id)
+
+
+@router.get("/shift-report")
+async def shift_report(
+    current_user: User = Depends(require_roles("owner")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await analytics_service.get_shift_report(db, current_user.venue_id)
+
+
+@router.get("/repeat-guests")
+async def repeat_guests(
+    current_user: User = Depends(require_roles("owner")),
+    db: AsyncSession = Depends(get_db),
+):
+    return await analytics_service.get_repeat_guests(db, current_user.venue_id)
 
 
 @router.get("/exit-pass-log")

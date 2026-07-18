@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { formatNGN } from "@/lib/utils";
-import { TrendingUp, ShoppingBag, Table2, DollarSign, UtensilsCrossed, Wine } from "lucide-react";
+import { TrendingUp, ShoppingBag, Table2, DollarSign, UtensilsCrossed, Wine, Wallet, XCircle } from "lucide-react";
 
 interface TonightData {
   today_revenue: number;
@@ -14,6 +14,25 @@ interface TonightData {
   top_items: { name: string; item_type: string; qty: number; revenue: number }[];
 }
 
+interface ShiftReport {
+  cashiers: {
+    cashier_id: string | null;
+    cashier_name: string;
+    methods: Record<string, { count: number; total: number }>;
+    total: number;
+    count: number;
+  }[];
+  voids: {
+    at: string;
+    by: string;
+    item_name: string | null;
+    quantity: number | null;
+    line_total: number | null;
+  }[];
+  voided_value: number;
+  grand_total: number;
+}
+
 const ITEM_ICON: Record<string, React.ElementType> = {
   drink: Wine,
   food: UtensilsCrossed,
@@ -21,6 +40,7 @@ const ITEM_ICON: Record<string, React.ElementType> = {
 
 export default function TonightPage() {
   const [data, setData] = useState<TonightData | null>(null);
+  const [shift, setShift] = useState<ShiftReport | null>(null);
   const [error, setError] = useState(false);
 
   useEffect(() => {
@@ -28,6 +48,10 @@ export default function TonightPage() {
       .get("/analytics/tonight")
       .then((r) => setData(r.data))
       .catch(() => setError(true));
+    api
+      .get("/analytics/shift-report")
+      .then((r) => setShift(r.data))
+      .catch(() => {});
   }, []);
 
   if (error) {
@@ -189,6 +213,100 @@ export default function TonightPage() {
           </div>
         )}
       </div>
+
+      {/* Shift report — who took what money */}
+      {shift && (
+        <div>
+          <h2 className="font-display text-lg font-semibold mb-4" style={{ color: "var(--text)" }}>
+            Shift Report
+          </h2>
+          {shift.cashiers.length === 0 ? (
+            <div
+              className="rounded-2xl p-6 text-center"
+              style={{ background: "#111827", border: "1px solid #1E2D42" }}
+            >
+              <p className="text-sm" style={{ color: "var(--muted)" }}>
+                No payments recorded yet tonight
+              </p>
+            </div>
+          ) : (
+            <div
+              className="rounded-2xl overflow-hidden"
+              style={{ background: "#111827", border: "1px solid #1E2D42" }}
+            >
+              {shift.cashiers.map((c, i) => (
+                <div
+                  key={c.cashier_id ?? "online"}
+                  className="px-5 py-4"
+                  style={{ borderTop: i > 0 ? "1px solid #1E2D42" : "none" }}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2.5">
+                      <Wallet size={15} className="text-teal" />
+                      <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+                        {c.cashier_name}
+                      </p>
+                    </div>
+                    <p className="text-sm font-bold tabular-nums" style={{ color: "var(--teal)" }}>
+                      {formatNGN(c.total)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(c.methods).map(([method, m]) => (
+                      <span
+                        key={method}
+                        className="text-xs px-2.5 py-1 rounded-full capitalize"
+                        style={{ background: "#1A2535", color: "var(--muted)" }}
+                      >
+                        {method}: {formatNGN(m.total)} ({m.count})
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Voids — the theft-watch list */}
+      {shift && shift.voids.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-display text-lg font-semibold" style={{ color: "var(--text)" }}>
+              Voided Items
+            </h2>
+            <span className="text-sm font-semibold" style={{ color: "#f87171" }}>
+              −{formatNGN(shift.voided_value)}
+            </span>
+          </div>
+          <div
+            className="rounded-2xl overflow-hidden"
+            style={{ background: "#111827", border: "1px solid rgba(248,113,113,0.2)" }}
+          >
+            {shift.voids.map((v, i) => (
+              <div
+                key={`${v.at}-${i}`}
+                className="px-5 py-3.5 flex items-center gap-3"
+                style={{ borderTop: i > 0 ? "1px solid #1E2D42" : "none" }}
+              >
+                <XCircle size={14} style={{ color: "#f87171", flexShrink: 0 }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm truncate" style={{ color: "var(--text-soft)" }}>
+                    {v.quantity}× {v.item_name}
+                  </p>
+                  <p className="text-xs" style={{ color: "var(--muted)" }}>
+                    by {v.by} · {new Date(v.at).toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+                <p className="text-sm font-semibold tabular-nums flex-shrink-0" style={{ color: "#f87171" }}>
+                  {v.line_total != null ? formatNGN(v.line_total) : "—"}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

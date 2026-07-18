@@ -13,6 +13,8 @@ class PlaceOrderRequest(BaseModel):
     items: list[OrderItemInput]
     session_token: str | None = None
     order_source: Literal["qr_scan", "whatsapp", "walk_in"] = "qr_scan"
+    # Optional — enables repeat-guest recognition and WhatsApp receipts
+    customer_phone: str | None = None
 
 
 class OrderItemResponse(BaseModel):
@@ -39,6 +41,10 @@ class OrderResponse(BaseModel):
     status: str
     order_source: str
     total_amount: float
+    service_charge: float
+    vat_amount: float
+    grand_total: float
+    customer_phone: str | None
     items: list[OrderItemResponse]
     created_at: datetime
     updated_at: datetime

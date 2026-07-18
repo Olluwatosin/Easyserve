@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth";
 import { getRoleHome } from "@/components/AuthGuard";
@@ -9,8 +8,9 @@ import { Eye, EyeOff } from "lucide-react";
 import toast from "react-hot-toast";
 import { EsLogo } from "@/components/EsLogo";
 
-const HERO =
-  "https://images.unsplash.com/photo-1470337458703-46ad1756a187?auto=format&fit=crop&w=1400&q=85";
+// Self-hosted gradient backdrop — no third-party image dependency at runtime.
+const HERO_BG =
+  "radial-gradient(ellipse at 25% 25%, rgba(0,212,180,0.16) 0%, transparent 55%), radial-gradient(ellipse at 80% 80%, rgba(255,149,0,0.08) 0%, transparent 50%), linear-gradient(160deg, #10202F 0%, #080D14 65%)";
 
 const FEATURES = [
   { label: "Orders", value: "Managed live" },
@@ -22,6 +22,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
+  const [showForgot, setShowForgot] = useState(false);
   const { login, loading } = useAuthStore();
   const router = useRouter();
 
@@ -43,14 +44,7 @@ export default function LoginPage() {
     <main className="min-h-screen flex bg-bg overflow-hidden">
       {/* ── Left hero panel (desktop only) ── */}
       <div className="hidden lg:flex lg:w-[56%] relative flex-shrink-0">
-        <Image
-          src={HERO}
-          alt="Luxury lounge bar"
-          fill
-          className="object-cover"
-          priority
-          sizes="56vw"
-        />
+        <div className="absolute inset-0" style={{ background: HERO_BG }} />
         {/* Dark gradient overlays */}
         <div
           className="absolute inset-0"
@@ -101,23 +95,31 @@ export default function LoginPage() {
       </div>
 
       {/* ── Right: form panel ── */}
-      <div className="flex-1 relative flex items-center justify-center px-6 py-12">
+      <div className="flex-1 relative flex items-center justify-center px-6 py-12 overflow-hidden">
         {/* Mobile background fallback */}
         <div className="absolute inset-0 lg:hidden overflow-hidden">
-          <Image
-            src={HERO}
-            alt=""
-            fill
-            className="object-cover opacity-20 scale-105 blur-sm"
-            sizes="100vw"
-          />
+          <div className="absolute inset-0" style={{ background: HERO_BG }} />
           <div
             className="absolute inset-0"
-            style={{ background: "rgba(8,13,20,0.88)" }}
+            style={{ background: "rgba(8,13,20,0.7)" }}
           />
         </div>
 
-        <div className="relative w-full max-w-[390px] animate-fade-in">
+        {/* Desktop: same backdrop continues from left panel */}
+        <div
+          className="hidden lg:block absolute inset-0"
+          style={{ background: HERO_BG }}
+        />
+        {/* Dark overlay so form stays readable */}
+        <div
+          className="hidden lg:block absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(8,13,20,0.80) 0%, rgba(8,13,20,0.65) 55%, rgba(8,13,20,0.78) 100%)",
+          }}
+        />
+
+        <div className="relative z-10 w-full max-w-[390px] animate-fade-in">
           {/* Mobile-only logo */}
           <div className="flex flex-col items-center mb-8 lg:hidden">
             <EsLogo size={56} variant="glow-glass" className="mb-4" />
@@ -147,10 +149,12 @@ export default function LoginPage() {
             onSubmit={handleSubmit}
             className="rounded-2xl p-6 space-y-5"
             style={{
-              background: "#111827",
-              border: "1px solid #1E2D42",
+              background: "rgba(8,13,20,0.72)",
+              backdropFilter: "blur(22px)",
+              WebkitBackdropFilter: "blur(22px)",
+              border: "1px solid rgba(255,255,255,0.09)",
               boxShadow:
-                "0 32px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.025), inset 0 1px 0 rgba(255,255,255,0.04)",
+                "0 32px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,212,180,0.06), inset 0 1px 0 rgba(255,255,255,0.07)",
             }}
           >
             <div>
@@ -172,12 +176,24 @@ export default function LoginPage() {
             </div>
 
             <div>
-              <label
-                className="block text-sm font-medium mb-1.5"
-                style={{ color: "var(--text-soft)" }}
-              >
-                Password
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label
+                  className="block text-sm font-medium"
+                  style={{ color: "var(--text-soft)" }}
+                >
+                  Password
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowForgot((v) => !v)}
+                  className="text-xs transition-colors"
+                  style={{ color: "var(--muted)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--teal)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--muted)")}
+                >
+                  Forgot password?
+                </button>
+              </div>
               <div className="relative">
                 <input
                   className="input pr-11"
@@ -199,6 +215,32 @@ export default function LoginPage() {
                 </button>
               </div>
             </div>
+
+            {showForgot && (
+              <div
+                className="rounded-xl p-4 text-xs space-y-2 animate-fade-in"
+                style={{
+                  background: "rgba(0,212,180,0.06)",
+                  border: "1px solid rgba(0,212,180,0.2)",
+                }}
+              >
+                <p className="font-semibold" style={{ color: "var(--teal)" }}>
+                  Password reset
+                </p>
+                <p style={{ color: "var(--text-soft)" }}>
+                  <strong>Venue owner?</strong> Log in and go to{" "}
+                  <span style={{ color: "var(--teal)" }}>Settings → Change Password</span>{" "}
+                  to update it. If you&apos;re locked out, email{" "}
+                  <a href="mailto:support@easyserve.ng" style={{ color: "var(--teal)" }}>
+                    support@easyserve.ng
+                  </a>
+                  .
+                </p>
+                <p style={{ color: "var(--muted)" }}>
+                  <strong>Staff member?</strong> Ask your venue manager to reset your PIN from the Staff page.
+                </p>
+              </div>
+            )}
 
             <button type="submit" disabled={loading} className="btn-teal w-full mt-1">
               {loading ? (

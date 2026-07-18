@@ -17,6 +17,7 @@ from app.models.exit_pass import ExitPass
 from app.schemas.alert import AlertCreate, AlertResponse
 from app.schemas.feedback import FeedbackCreate, FeedbackResponse
 from app.schemas.order import OrderResponse, PlaceOrderRequest
+from app.schemas.payment import InitiateGatewayPayment
 from app.services.alert_service import create_alert
 from app.services.order_service import place_order
 from app.services.promo_service import get_active_promos, apply_promo
@@ -51,6 +52,8 @@ async def _build_menu_response(db: AsyncSession, venue: Venue, table: Table | No
             "image_url": item.image_url,
             "item_type": item.item_type,
             "category_id": item.category_id,
+            "is_available": item.is_available,
+            "order_count": item.order_count,
         }
         cat_id = item.category_id or "uncategorised"
         items_by_category.setdefault(cat_id, []).append(entry)
@@ -162,6 +165,20 @@ async def submit_feedback(
     await db.commit()
     await db.refresh(fb)
     return fb
+
+
+@router.post("/pay/{session_token}")
+@limiter.limit("10/minute")
+async def initiate_customer_payment(
+    request: Request,
+    session_token: str,
+    req: InitiateGatewayPayment,
+    db: AsyncSession = Depends(get_db),
+):
+    """Start a Paystack checkout (card / bank transfer / USSD) for an order
+    on this session. The webhook confirms it and issues the exit pass."""
+    from app.services.payment_service import initiate_gateway_payment
+    return await initiate_gateway_payment(db, session_token, req.order_id, req.email)
 
 
 @router.get("/exit-pass/{session_token}")

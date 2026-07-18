@@ -11,6 +11,9 @@ WORKDIR /workspace
 
 RUN uv sync --frozen --no-dev
 
+# bcrypt >=4 breaks passlib 1.7.4 — pin to 3.2.2
+RUN uv pip install "bcrypt==3.2.2" --python /workspace/.venv/bin/python
+
 COPY backend/ /workspace/backend/
 
 WORKDIR /workspace/backend

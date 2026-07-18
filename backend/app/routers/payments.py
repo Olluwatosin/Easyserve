@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends
+import json
+
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -7,9 +9,29 @@ from app.dependencies import require_roles
 from app.models.payment import Payment
 from app.models.user import User
 from app.schemas.payment import CashPaymentCreate, PaymentCreate, PaymentResponse
-from app.services.payment_service import record_cash_payment, record_payment
+from app.services import paystack_service
+from app.services.payment_service import confirm_gateway_payment, record_cash_payment, record_payment
 
 router = APIRouter(prefix="/payments", tags=["payments"])
+
+
+@router.post("/webhook/paystack", include_in_schema=False)
+async def paystack_webhook(request: Request, db: AsyncSession = Depends(get_db)):
+    # Authenticated by the HMAC signature over the raw body — no bearer token.
+    raw = await request.body()
+    signature = request.headers.get("x-paystack-signature")
+    if not paystack_service.verify_webhook_signature(raw, signature):
+        raise HTTPException(status_code=401, detail="Invalid signature")
+
+    event = json.loads(raw)
+    if event.get("event") == "charge.success":
+        data = event.get("data", {})
+        reference = data.get("reference")
+        amount_kobo = int(data.get("amount", 0))
+        if reference:
+            await confirm_gateway_payment(db, reference, amount_kobo)
+    # Always 200 — Paystack retries anything else and we handle our own errors.
+    return {"status": "ok"}
 
 
 @router.post("", status_code=201)
@@ -18,7 +40,7 @@ async def create_payment(
     current_user: User = Depends(require_roles("owner", "cashier")),
     db: AsyncSession = Depends(get_db),
 ):
-    payment, exit_pass = await record_payment(db, req, current_user.id)
+    payment, exit_pass = await record_payment(db, req, current_user.id, current_user.venue_id)
     return {
         "payment": PaymentResponse.model_validate(payment),
         "exit_pass": {"token": exit_pass.token, "expires_at": exit_pass.expires_at.isoformat(), "status": exit_pass.status},
@@ -31,7 +53,7 @@ async def create_cash_payment(
     current_user: User = Depends(require_roles("owner", "cashier")),
     db: AsyncSession = Depends(get_db),
 ):
-    payment, exit_pass = await record_cash_payment(db, req, current_user.id)
+    payment, exit_pass = await record_cash_payment(db, req, current_user.id, current_user.venue_id)
     return {
         "payment": PaymentResponse.model_validate(payment),
         "exit_pass": {"token": exit_pass.token, "expires_at": exit_pass.expires_at.isoformat(), "status": exit_pass.status},

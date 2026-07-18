@@ -1,5 +1,4 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
-from jose import JWTError
 
 from app.services.ws_manager import manager
 from app.utils.security import decode_token
@@ -11,12 +10,11 @@ async def _authenticate_ws(websocket: WebSocket, token: str | None) -> str | Non
     if not token:
         await websocket.close(code=4001)
         return None
-    try:
-        payload = decode_token(token)
-        return payload.get("venue_id")
-    except JWTError:
+    payload = decode_token(token)
+    if not payload or payload.get("type") != "access":
         await websocket.close(code=4003)
         return None
+    return payload.get("venue_id")
 
 
 @router.websocket("/ws/{venue_id}")

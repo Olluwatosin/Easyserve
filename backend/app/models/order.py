@@ -26,6 +26,11 @@ class Order(Base):
     status: Mapped[str] = mapped_column(String(20), default="open", nullable=False)
     order_source: Mapped[str] = mapped_column(String(20), default="qr_scan", nullable=False)
     total_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    customer_phone: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    # Snapshots computed from the venue's percentages when the order changes,
+    # so later settings edits never alter an existing bill.
+    service_charge: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False)
+    vat_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -36,6 +41,10 @@ class Order(Base):
     @property
     def table_label(self) -> str | None:
         return self.table.label if self.table is not None else None
+
+    @property
+    def grand_total(self) -> float:
+        return round(float(self.total_amount) + float(self.service_charge) + float(self.vat_amount), 2)
 
     venue = relationship("Venue", back_populates="orders")
     table = relationship("Table", back_populates="orders", lazy="selectin")

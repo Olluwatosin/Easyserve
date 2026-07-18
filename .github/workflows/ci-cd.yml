@@ -71,5 +71,7 @@ jobs:
             set -e
             cd ${{ secrets.VPS_PATH }}
             git pull origin main
-            docker compose up --build -d
+            # Secrets (SECRET_KEY, POSTGRES_PASSWORD, PUBLIC_API_URL, PUBLIC_WS_URL,
+            # ALLOWED_ORIGINS) are read from a .env file kept on the VPS next to the compose file.
+            docker compose -f docker-compose.prod.yml up --build -d
             docker system prune -f

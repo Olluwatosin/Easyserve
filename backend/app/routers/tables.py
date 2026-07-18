@@ -7,7 +7,7 @@ from app.database import get_db
 from app.dependencies import require_roles
 from app.models.table import Table
 from app.models.user import User
-from app.schemas.table import TableAssign, TableCreate, TableResponse, TableUpdate
+from app.schemas.table import TableAssign, TableAssignMulti, TableCreate, TableResponse, TableUpdate
 from app.utils.helpers import generate_qr_image_bytes
 
 router = APIRouter(prefix="/tables", tags=["tables"])
@@ -34,6 +34,7 @@ async def create_table(
         label=req.label,
         capacity=getattr(req, "capacity", None),
         zone=req.zone,
+        min_spend=req.min_spend,
         qr_token=str(uuid.uuid4()),
     )
     db.add(table)
@@ -116,6 +117,28 @@ async def assign_table(
     return table
 
 
+@router.patch("/{table_id}/assign-multi", response_model=TableResponse)
+async def assign_multiple_attendants(
+    table_id: str,
+    req: TableAssignMulti,
+    current_user: User = Depends(require_roles("owner")),
+    db: AsyncSession = Depends(get_db),
+):
+    result = await db.execute(
+        select(Table).where(Table.id == table_id, Table.venue_id == current_user.venue_id)
+    )
+    table = result.scalar_one_or_none()
+    if not table:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="Table not found")
+    ids = [i for i in req.attendant_ids if i.strip()]
+    table.assigned_attendant_id = ids[0] if ids else None
+    table.extra_attendant_ids = ",".join(ids[1:]) if len(ids) > 1 else ""
+    await db.commit()
+    await db.refresh(table)
+    return table
+
+
 @router.patch("/{table_id}/unassign", response_model=TableResponse)
 async def unassign_table(
     table_id: str,
@@ -130,6 +153,7 @@ async def unassign_table(
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Table not found")
     table.assigned_attendant_id = None
+    table.extra_attendant_ids = ""
     await db.commit()
     await db.refresh(table)
     return table

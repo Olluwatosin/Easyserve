@@ -38,6 +38,7 @@ services:
     environment:
       DATABASE_URL: postgresql+asyncpg://easyserve:easyserve@db:5432/easyserve
       REDIS_URL: redis://redis:6379
+      ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:3001"
     depends_on:
       db:
         condition: service_healthy

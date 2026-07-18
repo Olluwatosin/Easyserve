@@ -1,5 +1,11 @@
-from pydantic_settings import BaseSettings
+from pathlib import Path
 from typing import List
+
+from pydantic import model_validator
+from pydantic_settings import BaseSettings
+
+# Placeholder value shipped in .env.example — must never reach production.
+_PLACEHOLDER_SECRET = "change-this-to-a-random-32-char-secret-key"
 
 
 class Settings(BaseSettings):
@@ -15,10 +21,24 @@ class Settings(BaseSettings):
     EXIT_PASS_DEFAULT_MINUTES: int = 10
     ENVIRONMENT: str = "development"
     ALLOWED_ORIGINS: str = "http://localhost:3000"
+    # Paystack pay-by-transfer. Empty key = feature disabled (endpoints return 503).
+    PAYSTACK_SECRET_KEY: str = ""
+    # Where uploaded menu images and other static assets are stored on disk.
+    STATIC_DIR: str = str(Path(__file__).resolve().parent.parent / "static")
 
     @property
     def allowed_origins_list(self) -> List[str]:
         return [o.strip() for o in self.ALLOWED_ORIGINS.split(",")]
+
+    @model_validator(mode="after")
+    def _validate_secret(self) -> "Settings":
+        if self.ENVIRONMENT != "development":
+            if self.SECRET_KEY == _PLACEHOLDER_SECRET or len(self.SECRET_KEY) < 32:
+                raise ValueError(
+                    "SECRET_KEY must be a unique value of at least 32 characters "
+                    "outside development"
+                )
+        return self
 
     class Config:
         env_file = ".env"

@@ -5,7 +5,7 @@ from sqlalchemy import select
 from app.models.user import User
 from app.models.venue import Venue
 from app.schemas.auth import RegisterRequest, LoginRequest, PinLoginRequest, TokenResponse
-from app.utils.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token
+from app.utils.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token, token_is_revoked
 from app.utils.helpers import slugify, new_uuid
 
 
@@ -102,6 +102,8 @@ async def refresh(db: AsyncSession, refresh_token: str) -> TokenResponse:
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=401, detail="User not found")
+    if token_is_revoked(payload, user.tokens_valid_after):
+        raise HTTPException(status_code=401, detail="Invalid refresh token")
 
     token_data = {"sub": user.id, "venue_id": user.venue_id, "role": user.role}
     return TokenResponse(

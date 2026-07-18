@@ -27,6 +27,11 @@ class Payment(Base):
     )
     is_split: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     split_data: Mapped[dict | None] = mapped_column(JSONB)
+    # "confirmed" for cashier-recorded payments; gateway payments start
+    # "pending" and are confirmed by the provider webhook.
+    status: Mapped[str] = mapped_column(String(20), default="confirmed", nullable=False)
+    provider: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    provider_ref: Mapped[str | None] = mapped_column(String(100), nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

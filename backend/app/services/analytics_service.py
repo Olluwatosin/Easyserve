@@ -1,7 +1,9 @@
+import json
 from datetime import datetime, timezone, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 
+from app.models.audit_log import AuditLog
 from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.payment import Payment
@@ -226,6 +228,108 @@ async def get_inventory_alerts(db: AsyncSession, venue_id: str) -> list[dict]:
         {"item_id": i.id, "name": i.name, "item_type": i.item_type,
          "order_count": i.order_count, "stock_threshold": i.stock_threshold}
         for i in result.scalars().all()
+    ]
+
+
+async def get_shift_report(db: AsyncSession, venue_id: str) -> dict:
+    """Tonight's money trail: per-cashier totals by method + every void.
+
+    This is the anti-theft report — expected cash per cashier vs what was
+    recorded, and who cancelled what.
+    """
+    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+    # Per-cashier, per-method confirmed payments
+    pay_res = await db.execute(
+        select(
+            Payment.recorded_by,
+            User.full_name,
+            Payment.method,
+            func.count(Payment.id).label("cnt"),
+            func.sum(Payment.amount).label("total"),
+        )
+        .outerjoin(User, User.id == Payment.recorded_by)
+        .where(
+            Payment.venue_id == venue_id,
+            Payment.status == "confirmed",
+            Payment.created_at >= today_start,
+        )
+        .group_by(Payment.recorded_by, User.full_name, Payment.method)
+        .order_by(User.full_name)
+    )
+    by_cashier: dict[str, dict] = {}
+    for row in pay_res.all():
+        key = row.recorded_by or "online"
+        entry = by_cashier.setdefault(
+            key,
+            {"cashier_id": row.recorded_by, "cashier_name": row.full_name or "Online (auto-confirmed)", "methods": {}, "total": 0.0, "count": 0},
+        )
+        entry["methods"][row.method] = {"count": int(row.cnt), "total": float(row.total)}
+        entry["total"] = round(entry["total"] + float(row.total), 2)
+        entry["count"] += int(row.cnt)
+
+    # Voids tonight, with who did them
+    void_res = await db.execute(
+        select(AuditLog, User.full_name)
+        .outerjoin(User, User.id == AuditLog.actor_id)
+        .where(
+            AuditLog.venue_id == venue_id,
+            AuditLog.action == "item_voided",
+            AuditLog.created_at >= today_start,
+        )
+        .order_by(AuditLog.created_at.desc())
+    )
+    voids = []
+    voided_value = 0.0
+    for log, actor_name in void_res.all():
+        d = json.loads(log.details) if log.details else {}
+        voided_value = round(voided_value + float(d.get("line_total", 0)), 2)
+        voids.append({
+            "at": log.created_at.isoformat(),
+            "by": actor_name or "Unknown",
+            "item_name": d.get("item_name"),
+            "quantity": d.get("quantity"),
+            "line_total": d.get("line_total"),
+            "order_id": d.get("order_id"),
+        })
+
+    return {
+        "cashiers": list(by_cashier.values()),
+        "voids": voids,
+        "voided_value": voided_value,
+        "grand_total": round(sum(c["total"] for c in by_cashier.values()), 2),
+    }
+
+
+async def get_repeat_guests(db: AsyncSession, venue_id: str) -> list[dict]:
+    """Guests recognised by phone number — visits and lifetime spend."""
+    result = await db.execute(
+        select(
+            Order.customer_phone,
+            func.count(func.distinct(Order.session_token)).label("visits"),
+            func.count(Order.id).label("orders"),
+            func.sum(Order.total_amount + Order.service_charge + Order.vat_amount).label("spend"),
+            func.max(Order.created_at).label("last_seen"),
+        )
+        .where(
+            Order.venue_id == venue_id,
+            Order.customer_phone.isnot(None),
+            Order.status == "paid",
+        )
+        .group_by(Order.customer_phone)
+        .having(func.count(func.distinct(Order.session_token)) >= 2)
+        .order_by(func.count(func.distinct(Order.session_token)).desc())
+        .limit(50)
+    )
+    return [
+        {
+            "phone": r.customer_phone,
+            "visits": int(r.visits),
+            "orders": int(r.orders),
+            "total_spend": float(r.spend or 0),
+            "last_seen": r.last_seen.isoformat(),
+        }
+        for r in result.all()
     ]
 
 

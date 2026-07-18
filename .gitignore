@@ -17,6 +17,10 @@ frontend/.env.local
 frontend/node_modules/
 frontend/.next/
 frontend/out/
+frontend/tsconfig.tsbuildinfo
+
+# Uploaded assets (served at runtime, not source)
+backend/static/
 
 # Docker
 docker-compose.override.yml

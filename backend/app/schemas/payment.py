@@ -21,6 +21,11 @@ class CashPaymentCreate(BaseModel):
             raise ValueError("Cash must be physically confirmed before recording")
 
 
+class InitiateGatewayPayment(BaseModel):
+    order_id: str
+    email: str | None = None
+
+
 class PaymentResponse(BaseModel):
     id: str
     order_id: str
@@ -30,6 +35,8 @@ class PaymentResponse(BaseModel):
     recorded_by: str | None
     is_split: bool
     split_data: dict | None
+    status: str
+    provider: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}

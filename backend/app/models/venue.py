@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, String, Text, func
+from sqlalchemy import Boolean, DateTime, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -25,6 +25,9 @@ class Venue(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     exit_pass_minutes: Mapped[int] = mapped_column(default=10, nullable=False)
+    # Bill percentages (10.00 = 10%). Snapshotted onto each order at creation.
+    service_charge_pct: Mapped[float] = mapped_column(Numeric(5, 2), default=0, nullable=False)
+    vat_pct: Mapped[float] = mapped_column(Numeric(5, 2), default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

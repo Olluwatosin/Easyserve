@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
+import { Eye, EyeOff, KeyRound } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface Venue {
@@ -11,6 +12,8 @@ interface Venue {
   slug: string;
   plan: string;
   exit_pass_minutes: number;
+  service_charge_pct: number;
+  vat_pct: number;
 }
 
 const PLAN_FEATURES: Record<string, string[]> = {
@@ -23,20 +26,52 @@ const PLAN_FEATURES: Record<string, string[]> = {
 export default function SettingsPage() {
   const [venue, setVenue] = useState<Venue | null>(null);
   const [exitMinutes, setExitMinutes] = useState(7);
+  const [serviceChargePct, setServiceChargePct] = useState(0);
+  const [vatPct, setVatPct] = useState(0);
   const [saving, setSaving] = useState(false);
   const { user } = useAuthStore();
+
+  // Change password state
+  const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
+  const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false });
+  const [pwSaving, setPwSaving] = useState(false);
 
   useEffect(() => {
     api.get("/venues/me").then((r) => {
       setVenue(r.data);
       setExitMinutes(r.data.exit_pass_minutes);
+      setServiceChargePct(Number(r.data.service_charge_pct ?? 0));
+      setVatPct(Number(r.data.vat_pct ?? 0));
     }).catch(() => {});
   }, []);
+
+  async function changePassword() {
+    if (pwForm.next !== pwForm.confirm) { toast.error("Passwords don't match"); return; }
+    if (pwForm.next.length < 8) { toast.error("Password must be at least 8 characters"); return; }
+    setPwSaving(true);
+    try {
+      await api.post("/auth/change-password", {
+        current_password: pwForm.current,
+        new_password: pwForm.next,
+      });
+      toast.success("Password updated successfully");
+      setPwForm({ current: "", next: "", confirm: "" });
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Update failed";
+      toast.error(msg);
+    } finally {
+      setPwSaving(false);
+    }
+  }
 
   async function save() {
     setSaving(true);
     try {
-      await api.patch("/venues/me", { exit_pass_minutes: exitMinutes });
+      await api.patch("/venues/me", {
+        exit_pass_minutes: exitMinutes,
+        service_charge_pct: serviceChargePct,
+        vat_pct: vatPct,
+      });
       toast.success("Settings saved");
     } catch {
       toast.error("Save failed");
@@ -94,6 +129,40 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-text-soft text-sm font-medium mb-1.5">
+                    Service Charge (%)
+                  </label>
+                  <input
+                    className="input w-full"
+                    type="number"
+                    min="0"
+                    max="25"
+                    step="0.5"
+                    value={serviceChargePct}
+                    onChange={(e) => setServiceChargePct(parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-text-soft text-sm font-medium mb-1.5">
+                    VAT (%)
+                  </label>
+                  <input
+                    className="input w-full"
+                    type="number"
+                    min="0"
+                    max="15"
+                    step="0.5"
+                    value={vatPct}
+                    onChange={(e) => setVatPct(parseFloat(e.target.value) || 0)}
+                  />
+                </div>
+              </div>
+              <p className="text-muted text-xs -mt-2">
+                Applied to new orders only — existing bills keep their original charges. Nigerian VAT is 7.5%.
+              </p>
+
               <button onClick={save} disabled={saving} className="btn-teal">
                 {saving ? "Saving…" : "Save Changes"}
               </button>
@@ -104,6 +173,49 @@ export default function SettingsPage() {
               <div className="h-4 bg-bg-hover rounded w-1/3" />
             </div>
           )}
+        </div>
+
+        {/* Change Password */}
+        <div className="card space-y-4">
+          <div className="flex items-center gap-2">
+            <KeyRound size={18} style={{ color: "var(--teal)" }} />
+            <h2 className="font-display text-lg font-semibold text-text">Change Password</h2>
+          </div>
+          <div className="space-y-3">
+            {(["current", "next", "confirm"] as const).map((field) => {
+              const labels = { current: "Current password", next: "New password", confirm: "Confirm new password" };
+              return (
+                <div key={field}>
+                  <label className="block text-text-soft text-sm mb-1.5">{labels[field]}</label>
+                  <div className="relative">
+                    <input
+                      className="input pr-10"
+                      type={showPw[field] ? "text" : "password"}
+                      value={pwForm[field]}
+                      onChange={(e) => setPwForm((f) => ({ ...f, [field]: e.target.value }))}
+                      placeholder="••••••••"
+                      autoComplete={field === "current" ? "current-password" : "new-password"}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPw((s) => ({ ...s, [field]: !s[field] }))}
+                      className="absolute right-3 top-1/2 -translate-y-1/2"
+                      style={{ color: "var(--muted)" }}
+                    >
+                      {showPw[field] ? <EyeOff size={14} /> : <Eye size={14} />}
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <button
+            onClick={changePassword}
+            disabled={pwSaving || !pwForm.current || !pwForm.next || !pwForm.confirm}
+            className="btn-teal"
+          >
+            {pwSaving ? "Updating…" : "Update Password"}
+          </button>
         </div>
 
         {/* Plan info */}

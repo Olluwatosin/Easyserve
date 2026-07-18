@@ -12,7 +12,7 @@ interface StaffScore { full_name: string; avg_minutes: number; orders_handled: n
 interface FeedbackSummary { avg_rating: number; total_responses: number; }
 interface InventoryAlert { name: string; order_count: number; }
 
-function PlanGate({ children }: { children: React.ReactNode }) {
+function PlanGate() {
   return (
     <div className="card flex flex-col items-center justify-center py-12 gap-3 opacity-60">
       <Lock size={28} className="text-muted" />

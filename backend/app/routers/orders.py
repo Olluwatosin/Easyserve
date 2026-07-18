@@ -9,7 +9,10 @@ from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.table import Table
 from app.models.user import User
+from app.models.venue import Venue
 from app.schemas.order import ItemStatusUpdate, OrderAssign, OrderResponse
+from app.services.audit_service import log_action
+from app.services.order_service import apply_bill_charges
 from app.services.routing_service import broadcast_item_ready
 from app.services.ws_manager import manager
 
@@ -36,6 +39,20 @@ async def list_orders(
         .limit(200)
     )
     orders = result.scalars().all()
+
+    # Attendants only see orders for their assigned tables.
+    # Unassigned tables are visible to all attendants so nothing falls through.
+    if current_user.role == "attendant":
+        uid = current_user.id
+        def _attendant_can_see(order: Order) -> bool:
+            table = order.table
+            if table is None:
+                return True
+            primary = table.assigned_attendant_id
+            extra = [x for x in (table.extra_attendant_ids or "").split(",") if x.strip()]
+            unassigned = primary is None and not extra
+            return unassigned or primary == uid or uid in extra
+        orders = [o for o in orders if _attendant_can_see(o)]
 
     if station:
         orders = [
@@ -90,8 +107,34 @@ async def update_item_status(
     if current_user.role == "kitchen" and item.item_type != "food":
         raise HTTPException(status_code=403, detail="Kitchen can only update food items")
 
-    item.status = req.status
     order = item.order
+    if order.status == "paid":
+        raise HTTPException(status_code=400, detail="Cannot modify items on a paid order")
+
+    # Voiding an item adjusts the bill and leaves an audit row — the classic
+    # inside-theft vector is a quiet cancel after the customer paid cash.
+    if req.status == "cancelled" and item.status != "cancelled":
+        line_total = round(float(item.price) * item.quantity, 2)
+        order.total_amount = max(0.0, round(float(order.total_amount) - line_total, 2))
+        venue_res = await db.execute(select(Venue).where(Venue.id == order.venue_id))
+        apply_bill_charges(order, venue_res.scalar_one())
+        log_action(
+            db,
+            venue_id=order.venue_id,
+            actor_id=current_user.id,
+            action="item_voided",
+            entity_type="order_item",
+            entity_id=item.id,
+            details={
+                "order_id": order.id,
+                "item_name": item.name,
+                "quantity": item.quantity,
+                "line_total": line_total,
+                "previous_status": item.status,
+            },
+        )
+
+    item.status = req.status
 
     # Auto-advance order status based on all items
     active_items = [i for i in order.items if i.status != "cancelled"]

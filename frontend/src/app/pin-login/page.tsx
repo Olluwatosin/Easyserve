@@ -10,10 +10,12 @@ import { EsLogo } from "@/components/EsLogo";
 
 const PAD = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"];
 
-const FEATURES = [
-  { icon: "🎯", label: "PIN-based access" },
-  { icon: "⚡", label: "Instant role login" },
-  { icon: "🔐", label: "Station-scoped portal" },
+const ROLES = [
+  { icon: "🍸", role: "Bartender", desc: "Bar display & drink orders" },
+  { icon: "🍽️", role: "Kitchen", desc: "Food tickets & prep queue" },
+  { icon: "💳", role: "Cashier", desc: "Payments & exit passes" },
+  { icon: "🛎️", role: "Attendant", desc: "Table service & alerts" },
+  { icon: "🔒", role: "Security", desc: "Exit QR scanner" },
 ];
 
 export default function PinLoginPage() {
@@ -61,12 +63,12 @@ export default function PinLoginPage() {
         className="hidden lg:flex flex-col justify-between p-10 relative overflow-hidden flex-shrink-0"
         style={{ width: "56%" }}
       >
-        {/* Background photo */}
+        {/* Gradient backdrop — no third-party image dependency at runtime */}
         <div
-          className="absolute inset-0 bg-cover bg-center"
+          className="absolute inset-0"
           style={{
-            backgroundImage:
-              "url('https://images.unsplash.com/photo-1566737236500-c8ac43014a67?auto=format&fit=crop&w=1400&q=85')",
+            background:
+              "radial-gradient(ellipse at 30% 20%, rgba(0,212,180,0.14) 0%, transparent 55%), radial-gradient(ellipse at 85% 85%, rgba(255,149,0,0.08) 0%, transparent 50%), linear-gradient(160deg, #10202F 0%, #080D14 65%)",
           }}
         />
         {/* Dark overlay */}
@@ -91,7 +93,7 @@ export default function PinLoginPage() {
           <EsLogo size={40} />
         </div>
 
-        {/* Middle: Heading + features */}
+        {/* Middle: Heading + roles */}
         <div className="relative z-10 space-y-6">
           <div>
             <p
@@ -103,19 +105,49 @@ export default function PinLoginPage() {
               Portal
             </p>
             <p className="mt-3 text-base" style={{ color: "rgba(176,188,204,0.8)" }}>
-              Where the crew keeps the night alive.
+              Each role has its own station and PIN.
             </p>
           </div>
-          <div className="space-y-3">
-            {FEATURES.map((f) => (
-              <div key={f.label} className="flex items-center gap-3">
-                <span className="text-xl">{f.icon}</span>
+
+          {/* How it works */}
+          <div
+            className="rounded-2xl p-5 space-y-2"
+            style={{ background: "rgba(8,13,20,0.45)", border: "1px solid rgba(255,255,255,0.07)" }}
+          >
+            <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ color: "var(--teal)" }}>
+              Staff roles
+            </p>
+            {ROLES.map((r) => (
+              <div key={r.role} className="flex items-center gap-3 py-1">
+                <span className="text-lg w-6 text-center flex-shrink-0">{r.icon}</span>
+                <div>
+                  <span className="text-sm font-semibold" style={{ color: "var(--text)" }}>{r.role}</span>
+                  <span className="text-xs ml-2" style={{ color: "rgba(176,188,204,0.6)" }}>{r.desc}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Steps */}
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-widest" style={{ color: "rgba(176,188,204,0.5)" }}>
+              How to sign in
+            </p>
+            {[
+              { n: "1", t: "Enter your venue ID", s: "Provided by your manager" },
+              { n: "2", t: "Type your 4-digit PIN", s: "Unique to your station role" },
+            ].map((step) => (
+              <div key={step.n} className="flex items-start gap-3">
                 <span
-                  className="text-sm font-medium"
-                  style={{ color: "rgba(176,188,204,0.85)" }}
+                  className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5"
+                  style={{ background: "rgba(0,212,180,0.15)", color: "var(--teal)" }}
                 >
-                  {f.label}
+                  {step.n}
                 </span>
+                <div>
+                  <p className="text-sm font-medium" style={{ color: "var(--text)" }}>{step.t}</p>
+                  <p className="text-xs" style={{ color: "rgba(176,188,204,0.55)" }}>{step.s}</p>
+                </div>
               </div>
             ))}
           </div>
@@ -130,14 +162,29 @@ export default function PinLoginPage() {
       </div>
 
       {/* ── Right form panel ── */}
-      <div className="flex-1 flex flex-col items-center justify-center relative min-h-screen">
-        {/* Mobile: blurred background */}
+      <div className="flex-1 flex flex-col items-center justify-center relative min-h-screen overflow-hidden">
+        {/* Mobile: dark gradient background */}
         <div
-          className="lg:hidden absolute inset-0 bg-cover bg-center"
+          className="lg:hidden absolute inset-0"
           style={{
-            backgroundImage:
-              "url('https://images.unsplash.com/photo-1566737236500-c8ac43014a67?auto=format&fit=crop&w=800&q=60')",
-            filter: "blur(14px) brightness(0.18)",
+            background:
+              "radial-gradient(ellipse at 50% 0%, rgba(0,212,180,0.08) 0%, transparent 55%), linear-gradient(180deg, #0C1826 0%, #080D14 70%)",
+          }}
+        />
+        {/* Desktop: same backdrop continues from left panel */}
+        <div
+          className="hidden lg:block absolute inset-0"
+          style={{
+            background:
+              "radial-gradient(ellipse at 30% 20%, rgba(0,212,180,0.14) 0%, transparent 55%), linear-gradient(160deg, #10202F 0%, #080D14 65%)",
+          }}
+        />
+        {/* Dark overlay */}
+        <div
+          className="hidden lg:block absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(135deg, rgba(8,13,20,0.80) 0%, rgba(8,13,20,0.65) 55%, rgba(8,13,20,0.78) 100%)",
           }}
         />
 
@@ -154,18 +201,43 @@ export default function PinLoginPage() {
             </span>
           </div>
 
-          {/* Page heading */}
+          {/* Step indicator + heading */}
           <div className="mb-7">
+            <div className="flex items-center gap-2 mb-3">
+              {[1, 2].map((n) => {
+                const active = (step === "venue" && n === 1) || (step === "pin" && n === 2);
+                const done = step === "pin" && n === 1;
+                return (
+                  <div key={n} className="flex items-center gap-2">
+                    <div
+                      className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all"
+                      style={{
+                        background: active ? "var(--teal)" : done ? "rgba(0,212,180,0.2)" : "rgba(255,255,255,0.06)",
+                        color: active ? "#080D14" : done ? "var(--teal)" : "var(--muted)",
+                      }}
+                    >
+                      {done ? "✓" : n}
+                    </div>
+                    {n < 2 && (
+                      <div className="w-8 h-px" style={{ background: done ? "rgba(0,212,180,0.4)" : "rgba(255,255,255,0.1)" }} />
+                    )}
+                  </div>
+                );
+              })}
+              <span className="text-xs ml-1" style={{ color: "var(--muted)" }}>
+                Step {step === "venue" ? "1" : "2"} of 2
+              </span>
+            </div>
             <h1
               className="font-display text-2xl font-bold"
               style={{ color: "var(--text)" }}
             >
-              {step === "venue" ? "Find your venue" : "Enter your PIN"}
+              {step === "venue" ? "Enter your venue ID" : "Enter your PIN"}
             </h1>
             <p className="mt-1.5 text-sm" style={{ color: "var(--muted)" }}>
               {step === "venue"
-                ? "Staff sign-in — different from owner login"
-                : `Venue: ${venue}`}
+                ? "Your manager provided this when setting up EasyServe"
+                : `Signing in to ${venue} — use your assigned station PIN`}
             </p>
           </div>
 
@@ -173,9 +245,11 @@ export default function PinLoginPage() {
           <div
             className="rounded-2xl p-6"
             style={{
-              background: "#111827",
-              border: "1px solid #1E2D42",
-              boxShadow: "0 32px 80px rgba(0,0,0,0.6)",
+              background: "rgba(8,13,20,0.72)",
+              backdropFilter: "blur(22px)",
+              WebkitBackdropFilter: "blur(22px)",
+              border: "1px solid rgba(255,255,255,0.09)",
+              boxShadow: "0 32px 80px rgba(0,0,0,0.55), 0 0 0 1px rgba(0,212,180,0.06), inset 0 1px 0 rgba(255,255,255,0.07)",
             }}
           >
             {step === "venue" ? (
@@ -191,7 +265,7 @@ export default function PinLoginPage() {
                   </label>
                   <input
                     className="input"
-                    placeholder="the-grand-noir"
+                    placeholder="e.g. the-grand-noir"
                     value={venue}
                     onChange={(e) =>
                       setVenue(e.target.value.toLowerCase().replace(/\s+/g, "-"))
@@ -203,7 +277,7 @@ export default function PinLoginPage() {
                     }
                   />
                   <p className="text-xs mt-1.5" style={{ color: "var(--muted)" }}>
-                    Ask your manager for your venue ID
+                    Lowercase, hyphens instead of spaces — your manager has this
                   </p>
                 </div>
                 <button
@@ -331,6 +405,10 @@ export default function PinLoginPage() {
                     />
                   </div>
                 )}
+
+                <p className="text-xs text-center mt-5" style={{ color: "var(--muted)" }}>
+                  Each role has a unique PIN · Contact your manager if you've forgotten yours
+                </p>
               </div>
             )}
           </div>
