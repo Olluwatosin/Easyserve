@@ -92,7 +92,8 @@ async def get_qr(
     if not table:
         from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Table not found")
-    url = f"https://app.easyserve.ng/table/{table.qr_token}"
+    from app.config import settings
+    url = f"{settings.FRONTEND_URL.rstrip('/')}/table/{table.qr_token}"
     img_bytes = generate_qr_image_bytes(url)
     return Response(content=img_bytes, media_type="image/png")
 

@@ -14,9 +14,29 @@ from app.models.table import Table
 from app.models.exit_pass import ExitPass
 from app.models.user import User
 
+LAGOS = timezone(timedelta(hours=1))  # WAT — no DST
+BUSINESS_DAY_START_HOUR = 6  # a nightlife "day" runs 6AM → 6AM Lagos time
+
+
+def business_day_start() -> datetime:
+    """Start of the current business day, in UTC.
+
+    UTC midnight is 1AM in Lagos — right in the middle of service — so a
+    calendar-day cutoff would split every Friday night's revenue across two
+    "days". Instead the day rolls over at 6AM WAT: everything from last
+    evening until this morning counts as one night.
+    """
+    now_lagos = datetime.now(LAGOS)
+    # Before 6AM we are still in yesterday's business day
+    anchor = now_lagos - timedelta(hours=BUSINESS_DAY_START_HOUR)
+    start_lagos = anchor.replace(
+        hour=BUSINESS_DAY_START_HOUR, minute=0, second=0, microsecond=0
+    )
+    return start_lagos.astimezone(timezone.utc)
+
 
 async def get_summary(db: AsyncSession, venue_id: str) -> dict:
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = business_day_start()
 
     rev = await db.execute(
         select(func.coalesce(func.sum(Payment.amount), 0))
@@ -51,7 +71,7 @@ async def get_summary(db: AsyncSession, venue_id: str) -> dict:
 
 
 async def get_tonight_summary(db: AsyncSession, venue_id: str) -> dict:
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = business_day_start()
 
     rev = await db.execute(
         select(func.coalesce(func.sum(Payment.amount), 0))
@@ -237,7 +257,7 @@ async def get_shift_report(db: AsyncSession, venue_id: str) -> dict:
     This is the anti-theft report — expected cash per cashier vs what was
     recorded, and who cancelled what.
     """
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = business_day_start()
 
     # Per-cashier, per-method confirmed payments
     pay_res = await db.execute(
@@ -334,7 +354,7 @@ async def get_repeat_guests(db: AsyncSession, venue_id: str) -> list[dict]:
 
 
 async def get_exit_pass_log(db: AsyncSession, venue_id: str) -> list[dict]:
-    today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    today_start = business_day_start()
     result = await db.execute(
         select(ExitPass, Order, Table)
         .join(Order, Order.id == ExitPass.order_id)

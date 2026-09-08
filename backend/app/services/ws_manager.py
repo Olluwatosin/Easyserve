@@ -25,16 +25,10 @@ class ConnectionManager:
     # ── Lifecycle ────────────────────────────────────────────────────────────
 
     async def startup(self, redis_url: str) -> None:
-        try:
-            self._redis = aioredis.from_url(redis_url, decode_responses=True)
-            await self._redis.ping()
-            pubsub = self._redis.pubsub()
-            await pubsub.subscribe(_CHANNEL)
-            self._listener_task = asyncio.create_task(self._listen(pubsub))
-            logger.info("WebSocket Redis pub/sub connected on %s", redis_url)
-        except Exception:
-            logger.warning("Redis unavailable — WebSocket falls back to single-instance mode")
-            self._redis = None
+        # The listener owns the connection and keeps retrying forever, so a
+        # Redis restart mid-service self-heals instead of degrading until the
+        # next backend deploy.
+        self._listener_task = asyncio.create_task(self._listen_forever(redis_url))
 
     async def shutdown(self) -> None:
         if self._listener_task:
@@ -45,6 +39,34 @@ class ConnectionManager:
                 pass
         if self._redis:
             await self._redis.aclose()
+
+    async def _listen_forever(self, redis_url: str) -> None:
+        delay = 1.0
+        while True:
+            try:
+                redis = aioredis.from_url(redis_url, decode_responses=True)
+                await redis.ping()
+                pubsub = redis.pubsub()
+                await pubsub.subscribe(_CHANNEL)
+                self._redis = redis
+                delay = 1.0
+                logger.info("WebSocket Redis pub/sub connected on %s", redis_url)
+                async for message in pubsub.listen():
+                    if message["type"] != "message":
+                        continue
+                    try:
+                        await self._dispatch(json.loads(message["data"]))
+                    except Exception:
+                        logger.exception("Error dispatching WebSocket message")
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                self._redis = None
+                logger.warning(
+                    "Redis unavailable — single-instance WS mode; retrying in %.0fs", delay
+                )
+                await asyncio.sleep(delay)
+                delay = min(delay * 2, 30.0)
 
     # ── Connect / Disconnect ─────────────────────────────────────────────────
 
@@ -118,21 +140,15 @@ class ConnectionManager:
             "data": data,
         })
         if self._redis:
-            await self._redis.publish(_CHANNEL, envelope)
-        else:
-            await self._dispatch(json.loads(envelope))
-
-    async def _listen(self, pubsub: aioredis.client.PubSub) -> None:
-        try:
-            async for message in pubsub.listen():
-                if message["type"] != "message":
-                    continue
-                try:
-                    await self._dispatch(json.loads(message["data"]))
-                except Exception:
-                    logger.exception("Error dispatching WebSocket message")
-        except asyncio.CancelledError:
-            pass
+            try:
+                await self._redis.publish(_CHANNEL, envelope)
+                return
+            except Exception:
+                # Redis died between health checks — deliver locally rather
+                # than failing the caller (e.g. an order placement).
+                logger.warning("Redis publish failed — dispatching locally")
+                self._redis = None
+        await self._dispatch(json.loads(envelope))
 
     async def _dispatch(self, env: dict) -> None:
         ch = env["channel"]

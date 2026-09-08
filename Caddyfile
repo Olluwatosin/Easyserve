@@ -1,0 +1,13 @@
+# EasyServe production reverse proxy — automatic HTTPS via Let's Encrypt.
+# Domains come from the deploy .env (APP_DOMAIN, API_DOMAIN).
+# Caddy proxies WebSockets automatically; no extra config needed for /ws.
+
+{$API_DOMAIN} {
+	encode gzip
+	reverse_proxy backend:8000
+}
+
+{$APP_DOMAIN} {
+	encode gzip
+	reverse_proxy frontend:3000
+}

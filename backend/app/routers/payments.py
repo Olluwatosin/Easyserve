@@ -66,11 +66,15 @@ async def get_payment(
     current_user: User = Depends(require_roles("owner", "cashier", "attendant")),
     db: AsyncSession = Depends(get_db),
 ):
+    # An order can have several payment rows (e.g. an abandoned online checkout
+    # left pending, then cash at the cashier) — prefer the confirmed one.
     result = await db.execute(
-        select(Payment).where(Payment.order_id == order_id, Payment.venue_id == current_user.venue_id)
+        select(Payment)
+        .where(Payment.order_id == order_id, Payment.venue_id == current_user.venue_id)
+        .order_by(Payment.created_at.desc())
     )
-    p = result.scalar_one_or_none()
+    payments = result.scalars().all()
+    p = next((x for x in payments if x.status == "confirmed"), payments[0] if payments else None)
     if not p:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="Payment not found")
     return p
