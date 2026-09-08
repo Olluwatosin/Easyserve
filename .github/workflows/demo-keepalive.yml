@@ -1,0 +1,81 @@
+# Keeps the free demo backend warm, and resets the seeded venue hourly.
+#
+# Free tiers sleep after ~15 minutes idle and take 30-60s to wake. A venue owner
+# who opens the demo link and watches a spinner has already formed an opinion,
+# so we ping /health often enough that it never sleeps.
+#
+# Requires two repository variables/secrets:
+#   vars.DEMO_API_URL         e.g. https://easyserve-demo-api.onrender.com
+#   secrets.DEMO_RESET_TOKEN  must match the backend's DEMO_RESET_TOKEN
+name: Demo keepalive
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # keep warm
+    - cron: "5 * * * *"      # hourly reseed, offset off the busy :00 slot
+  workflow_dispatch:
+    inputs:
+      reset:
+        description: "Also reset the demo venue"
+        type: boolean
+        default: false
+
+concurrency:
+  group: demo-keepalive
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    name: Ping /health
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake the demo backend
+        env:
+          API: ${{ vars.DEMO_API_URL }}
+        run: |
+          if [ -z "$API" ]; then
+            echo "::error::DEMO_API_URL repository variable is not set"
+            exit 1
+          fi
+          # Generous timeout: a cold start is exactly the case we're paying for.
+          code=$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 90 "$API/health") || true
+          echo "HTTP $code"
+          cat /tmp/health.json 2>/dev/null || true
+          echo
+          # 503 means the app is up but Postgres is unreachable — worth failing on,
+          # because that is the demo being broken rather than merely asleep.
+          if [ "$code" != "200" ]; then
+            echo "::error::Demo backend unhealthy (HTTP $code)"
+            exit 1
+          fi
+
+  reset:
+    name: Reseed the demo venue
+    runs-on: ubuntu-latest
+    needs: ping
+    if: github.event.schedule == '5 * * * *' || inputs.reset
+    steps:
+      - name: Wipe and re-seed The Grand Noir
+        env:
+          API: ${{ vars.DEMO_API_URL }}
+          TOKEN: ${{ secrets.DEMO_RESET_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::DEMO_RESET_TOKEN secret is not set"
+            exit 1
+          fi
+          code=$(curl -sS -X POST -o /tmp/reset.json -w '%{http_code}' --max-time 120 \
+            -H "X-Demo-Token: $TOKEN" "$API/api/v1/demo/reset") || true
+          echo "HTTP $code"
+          cat /tmp/reset.json 2>/dev/null || true
+          echo
+          # A 404 here means the backend refused: either ENVIRONMENT is not "demo"
+          # or the token doesn't match. Both are misconfiguration, not transient.
+          if [ "$code" = "404" ]; then
+            echo "::error::Reset refused. Check ENVIRONMENT=demo and that DEMO_RESET_TOKEN matches."
+            exit 1
+          fi
+          if [ "$code" != "200" ]; then
+            echo "::error::Demo reset failed (HTTP $code)"
+            exit 1
+          fi

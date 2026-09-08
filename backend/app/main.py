@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -9,6 +10,25 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.config import settings
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s — %(message)s",
+)
+
+# Optional error tracking — no-op unless SENTRY_DSN is configured
+if settings.SENTRY_DSN:
+    try:
+        import sentry_sdk
+
+        sentry_sdk.init(
+            dsn=settings.SENTRY_DSN,
+            environment=settings.ENVIRONMENT,
+            traces_sample_rate=0.1,
+        )
+        logging.getLogger(__name__).info("Sentry error tracking enabled")
+    except ImportError:
+        logging.getLogger(__name__).warning("SENTRY_DSN set but sentry-sdk not installed")
 from app.utils.limiter import limiter
 from app.routers import (
     auth,
@@ -24,6 +44,7 @@ from app.routers import (
     analytics,
     staff,
     websocket,
+    demo,
 )
 from app.services.ws_manager import manager
 
@@ -65,6 +86,7 @@ app.include_router(alerts.router, prefix="/api/v1")
 app.include_router(promos.router, prefix="/api/v1")
 app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(staff.router, prefix="/api/v1")
+app.include_router(demo.router, prefix="/api/v1")
 app.include_router(websocket.router)
 
 
@@ -76,4 +98,25 @@ app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "version": "5.0.0"}
+    """Deep health check: DB down → 503 (compose restarts us); Redis down is
+    reported but non-fatal (WS falls back to single-instance mode)."""
+    from fastapi.responses import JSONResponse
+    from sqlalchemy import text
+
+    from app.database import AsyncSessionLocal
+    from app.services.ws_manager import manager as ws_manager
+
+    db_ok = True
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+    except Exception:
+        db_ok = False
+
+    body = {
+        "status": "ok" if db_ok else "degraded",
+        "version": "5.0.0",
+        "db": "up" if db_ok else "down",
+        "redis": "up" if ws_manager._redis is not None else "down",
+    }
+    return JSONResponse(status_code=200 if db_ok else 503, content=body)

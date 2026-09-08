@@ -22,7 +22,7 @@ Staff PINs:
 
 import asyncio
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, time, timezone, timedelta
 
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
@@ -36,6 +36,7 @@ from app.models.venue import Venue
 from app.models.user import User
 from app.models.table import Table
 from app.models.menu_category import MenuCategory
+from app.models.promo import Promo
 from app.models.menu_item import MenuItem
 from app.models.order import Order
 from app.models.order_item import OrderItem
@@ -115,8 +116,8 @@ async def seed():
             # Simple approach: just proceed, duplicates will be skipped or errored
             # Better: wipe and redo
             from sqlalchemy import text
-            for tbl in ["exit_passes","payments","order_items","orders",
-                        "menu_items","menu_categories","tables","users","venues"]:
+            for tbl in ["exit_passes","payments","order_items","orders","alerts","feedback",
+                        "promos","audit_logs","menu_items","menu_categories","tables","users","venues"]:
                 await db.execute(text(f"DELETE FROM {tbl} WHERE TRUE"))
             await db.commit()
             print("Cleared existing data.")
@@ -179,8 +180,10 @@ async def seed():
 
         # ── Menu ─────────────────────────────────────────────────────────────
         item_map = {}  # name → (id, price, type)
+        cat_map = {}   # category name → id
         for cat_name, sort_order, items in MENU:
             cat_id = nid()
+            cat_map[cat_name] = cat_id
             db.add(MenuCategory(
                 id=cat_id,
                 venue_id=venue_id,
@@ -200,6 +203,33 @@ async def seed():
                     item_type=itype,
                     description=desc,
                 ))
+        await db.flush()
+
+        # ── Promos ───────────────────────────────────────────────────────────
+        # Windows deliberately span the whole day. A real venue's happy hour is
+        # something like 18:00–20:00, but the demo has to show promo pricing
+        # whenever a visitor happens to open the link.
+        #
+        # NOTE: apply_promo() compares against UTC and cannot match a window that
+        # crosses midnight (22:00–02:00 is never true), so real nightlife happy
+        # hours don't work yet. Tracked separately — don't copy these times into
+        # a live venue and expect them to behave.
+        ALL_DAY = (time(0, 0), time(23, 59))
+        db.add(Promo(
+            id=nid(), venue_id=venue_id, name="Ladies' Night — 20% off cocktails",
+            discount_pct=20, start_time=ALL_DAY[0], end_time=ALL_DAY[1],
+            days_active=[], applies_to=[cat_map["Cocktails & Mixers"]], is_active=True,
+        ))
+        db.add(Promo(
+            id=nid(), venue_id=venue_id, name="Kitchen Special — 15% off small plates",
+            discount_pct=15, start_time=ALL_DAY[0], end_time=ALL_DAY[1],
+            days_active=[], applies_to=[cat_map["Small Plates"]], is_active=True,
+        ))
+        db.add(Promo(
+            id=nid(), venue_id=venue_id, name="Bottle Service — 10% off packages",
+            discount_pct=10, start_time=ALL_DAY[0], end_time=ALL_DAY[1],
+            days_active=[], applies_to=[cat_map["Bottles & Packages"]], is_active=True,
+        ))
         await db.flush()
 
         # ── Orders ───────────────────────────────────────────────────────────

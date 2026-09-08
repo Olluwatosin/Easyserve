@@ -1,0 +1,51 @@
+# Render blueprint for the PUBLIC DEMO backend only.
+#
+# This is not the production stack. A real venue runs docker-compose.prod.yml on
+# a VPS — free tiers sleep, have no backup guarantee and no support path.
+#
+# Deliberate differences from production:
+#   * 1 worker, no Redis — ws_manager falls back to in-process fanout by design
+#   * ENVIRONMENT=demo — gates the destructive /api/v1/demo/reset endpoint
+#   * Postgres lives on Neon, not here (Render's free database expires)
+#
+# Set these in the Render dashboard (marked sync:false, so they never enter git):
+#   DATABASE_URL          Neon pooled URL, with ?ssl=require
+#   SECRET_KEY            openssl rand -hex 32
+#   DEMO_RESET_TOKEN      openssl rand -hex 32
+#   ALLOWED_ORIGINS       https://<your-app>.vercel.app
+#   FRONTEND_URL          https://<your-app>.vercel.app
+#   SENTRY_DSN            optional
+
+services:
+  - type: web
+    name: easyserve-demo-api
+    runtime: docker
+    plan: free
+    region: frankfurt          # closest free region to Nigeria
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .           # Dockerfile copies uv.lock from the repo root
+    healthCheckPath: /health
+    # Migrate on boot, then serve. One worker: the free tier has 512MB and the
+    # in-process WebSocket fanout needs all connections in a single process.
+    dockerCommand: >-
+      sh -c "alembic upgrade head &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips '*'"
+    envVars:
+      - key: ENVIRONMENT
+        value: demo
+      - key: PORT
+        value: 8000
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        sync: false
+      - key: DEMO_RESET_TOKEN
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      # Paystack intentionally unset on the demo — payment endpoints return 503
+      # rather than touching a live merchant account.

@@ -11,6 +11,39 @@ jobs:
   backend:
     name: Backend — test
     runs-on: ubuntu-latest
+
+    # Real Postgres and Redis so integration tests can exercise the money path
+    # (webhook -> payment -> exit pass) rather than only pure units.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: easyserve
+          POSTGRES_PASSWORD: easyserve
+          POSTGRES_DB: easyserve_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U easyserve"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://easyserve:easyserve@localhost:5432/easyserve_test
+      REDIS_URL: redis://localhost:6379
+      SECRET_KEY: ci-secret-key-that-is-at-least-32-characters-long
+      ENVIRONMENT: development
+
     steps:
       - uses: actions/checkout@v4
 
@@ -21,9 +54,10 @@ jobs:
       - name: Install dependencies
         run: uv sync --frozen
 
+      # `uv run pytest` resolves pytest from PATH, which silently picks up a
+      # shadowing system interpreter. `python -m` pins it to the project venv.
       - name: Run tests
-        # exit 5 = no tests collected; treat as pass until tests are written
-        run: uv run pytest -v || [ "$?" = "5" ]
+        run: uv run python -m pytest -v
         working-directory: backend
 
   # ── Frontend ───────────────────────────────────────────────────────────────
