@@ -33,10 +33,16 @@ jobs:
         env:
           API: ${{ vars.DEMO_API_URL }}
         run: |
+          # Strip whitespace and any trailing slash. A value pasted into the
+          # GitHub UI very easily picks up a leading space, and curl rejects the
+          # result outright ("URL rejected: Malformed input") without ever making
+          # a request — which looks identical to the service being down.
+          API=$(printf '%s' "$API" | tr -d '[:space:]' | sed 's:/*$::')
           if [ -z "$API" ]; then
             echo "::error::DEMO_API_URL repository variable is not set"
             exit 1
           fi
+          echo "Pinging: [$API/health]"
           # A cold start is exactly the case we are paying for, and two can stack:
           # Render wakes the container (~35-55s) and Neon wakes the branch from
           # scale-to-zero on the first query, which the boot-time migration makes.
@@ -72,6 +78,8 @@ jobs:
           API: ${{ vars.DEMO_API_URL }}
           TOKEN: ${{ secrets.DEMO_RESET_TOKEN }}
         run: |
+          API=$(printf '%s' "$API" | tr -d '[:space:]' | sed 's:/*$::')
+          TOKEN=$(printf '%s' "$TOKEN" | tr -d '[:space:]')
           if [ -z "$TOKEN" ]; then
             echo "::error::DEMO_RESET_TOKEN secret is not set"
             exit 1
