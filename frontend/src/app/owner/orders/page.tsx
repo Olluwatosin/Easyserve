@@ -6,6 +6,7 @@ import { useReconnectingWS } from "@/lib/ws";
 import { useAuthStore } from "@/stores/auth";
 import { formatNGN, timeAgo, formatTime } from "@/lib/utils";
 import toast from "react-hot-toast";
+import { WS_URL } from "@/lib/env";
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -131,7 +132,7 @@ export default function OrdersPage() {
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
   useReconnectingWS(
     user && token
-      ? `${process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000"}/ws/${user.venue_id}?token=${token}`
+      ? `${WS_URL}/ws/${user.venue_id}?token=${token}`
       : null,
     (msg) => {
       if (

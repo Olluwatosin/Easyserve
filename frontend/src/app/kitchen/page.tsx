@@ -7,6 +7,7 @@ import { useAuthStore } from "@/stores/auth";
 import AuthGuard from "@/components/AuthGuard";
 import toast from "react-hot-toast";
 import { CheckCircle, ChefHat, Clock } from "lucide-react";
+import { WS_URL } from "@/lib/env";
 
 interface OrderItem {
   id: string;
@@ -93,7 +94,7 @@ function KitchenContent() {
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
   const wsStatus = useReconnectingWS(
     user && token
-      ? `${process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000"}/ws/kitchen/${user.venue_id}?token=${token}`
+      ? `${WS_URL}/ws/kitchen/${user.venue_id}?token=${token}`
       : null,
     (msg) => {
       if (msg.event === "new_order_kitchen") {

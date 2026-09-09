@@ -9,6 +9,7 @@ import { timeAgo } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { WS_URL } from "@/lib/env";
 
 interface OrderItem {
   id: string;
@@ -54,7 +55,7 @@ function BarContent() {
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
   const wsStatus = useReconnectingWS(
     user && token
-      ? `${process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000"}/ws/bar/${user.venue_id}?token=${token}`
+      ? `${WS_URL}/ws/bar/${user.venue_id}?token=${token}`
       : null,
     (msg) => {
       if (msg.event === "new_order_bar") {

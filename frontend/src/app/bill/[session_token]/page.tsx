@@ -8,6 +8,7 @@ import { CheckCircle, Clock, Star, ChevronRight, MessageCircle, Users, CreditCar
 import toast from "react-hot-toast";
 import { EsLogo } from "@/components/EsLogo";
 import { QRCodeSVG } from "qrcode.react";
+import { WS_URL } from "@/lib/env";
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "#FF9500",
@@ -76,7 +77,7 @@ export default function BillPage({
   }, [session_token]);
 
   useReconnectingWS(
-    `${process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000"}/ws/customer/${session_token}`,
+    `${WS_URL}/ws/customer/${session_token}`,
     (msg) => {
       if (
         msg.event === "payment_confirmed" ||

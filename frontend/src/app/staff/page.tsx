@@ -9,6 +9,7 @@ import { formatNGN, timeAgo } from "@/lib/utils";
 import { Bell, LogOut, CheckCircle, Clock, ChefHat, Wine } from "lucide-react";
 import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
+import { WS_URL } from "@/lib/env";
 
 interface Alert {
   id: string;
@@ -83,7 +84,7 @@ function StaffContent() {
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
   const wsStatus = useReconnectingWS(
     user && token
-      ? `${process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000"}/ws/${user.venue_id}?token=${token}`
+      ? `${WS_URL}/ws/${user.venue_id}?token=${token}`
       : null,
     (msg) => {
       if (msg.event === "new_order_attendant") {
