@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { QrCode, Plus, Trash2, X, Copy, Download, UserPlus, Check } from "lucide-react";
+import { Check, Copy, Download, Plus, Printer, QrCode, Trash2, UserPlus, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import toast from "react-hot-toast";
 
@@ -109,6 +109,13 @@ export default function TablesPage() {
           <p className="text-muted text-sm mt-1">
             {tables.length} tables · assign attendants and share customer QR codes
           </p>
+          <a
+            href="/print/tables"
+            className="inline-flex items-center gap-1.5 mt-2 text-xs font-medium"
+            style={{ color: "var(--teal)" }}
+          >
+            <Printer size={13} /> Print all QR codes
+          </a>
         </div>
         <button onClick={() => setShowAdd(true)} className="btn-teal flex items-center gap-2">
           <Plus size={16} /> Add Table
