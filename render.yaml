@@ -25,11 +25,12 @@ services:
     dockerfilePath: ./backend/Dockerfile
     dockerContext: .           # Dockerfile copies uv.lock from the repo root
     healthCheckPath: /health
-    # Migrate on boot, then serve. One worker: the free tier has 512MB and the
-    # in-process WebSocket fanout needs all connections in a single process.
-    dockerCommand: >-
-      sh -c "alembic upgrade head &&
-      uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --proxy-headers --forwarded-allow-ips '*'"
+    # Migrate on boot, then serve — see backend/start.sh. Kept as a script
+    # rather than an inline command because Render folds `&&` and quoted args
+    # into a single argv element, which exits 127 before anything runs.
+    # One worker: the free tier has 512MB and the in-process WebSocket fanout
+    # needs every connection in a single process.
+    dockerCommand: /workspace/backend/start.sh
     envVars:
       - key: ENVIRONMENT
         value: demo
