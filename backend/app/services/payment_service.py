@@ -36,6 +36,16 @@ async def record_payment(db: AsyncSession, req: PaymentCreate, cashier_id: str, 
             detail=f"Amount {req.amount} is less than the amount due {amount_due}",
         )
 
+    # A transfer the cashier typed in is the one payment nothing verifies —
+    # the guest could show a doctored alert, or the staff member could route the
+    # money to their own account. It is recorded and the guest is let out, since
+    # blocking service on an unprovable claim is worse, but it is marked so the
+    # owner reviews it. Cash is verified by the physical tick; gateway payments
+    # by the provider webhook.
+    verification = "cash" if req.method == "cash" else (
+        "manual" if req.method in ("transfer", "mobile_wallet") else "cash"
+    )
+
     payment = Payment(
         id=str(uuid.uuid4()),
         order_id=order.id,
@@ -46,6 +56,8 @@ async def record_payment(db: AsyncSession, req: PaymentCreate, cashier_id: str, 
         is_split=req.is_split,
         split_data=req.split_data,
         status="confirmed",
+        verification=verification,
+        transfer_reference=getattr(req, "transfer_reference", None),
     )
     db.add(payment)
 
@@ -58,7 +70,13 @@ async def record_payment(db: AsyncSession, req: PaymentCreate, cashier_id: str, 
         action="payment_recorded",
         entity_type="payment",
         entity_id=payment.id,
-        details={"order_id": order.id, "amount": float(req.amount), "method": req.method},
+        details={
+            "order_id": order.id,
+            "amount": float(req.amount),
+            "method": req.method,
+            "verification": verification,
+            "reference": getattr(req, "transfer_reference", None),
+        },
     )
 
     # Generate exit pass
@@ -122,6 +140,8 @@ async def initiate_gateway_payment(
         method="transfer",
         recorded_by=None,
         status="pending",
+        # Upgraded to "gateway" when the webhook confirms the money moved.
+        verification="manual",
         provider="paystack",
         provider_ref=reference,
     )
@@ -169,6 +189,7 @@ async def confirm_gateway_payment(db: AsyncSession, reference: str, amount_kobo:
         return
 
     payment.status = "confirmed"
+    payment.verification = "gateway"
     payment.amount = round(amount_kobo / 100, 2)
     already_paid = order.status == "paid"
     order.status = "paid"

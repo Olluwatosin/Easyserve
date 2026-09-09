@@ -313,10 +313,43 @@ async def get_shift_report(db: AsyncSession, venue_id: str) -> dict:
             "order_id": d.get("order_id"),
         })
 
+    # Transfers a cashier asserted with nothing verifying them. This is the
+    # review queue: each one should match a credit on the venue's statement.
+    unver_res = await db.execute(
+        select(Payment, User.full_name, Order, Table.label)
+        .outerjoin(User, User.id == Payment.recorded_by)
+        .outerjoin(Order, Order.id == Payment.order_id)
+        .outerjoin(Table, Table.id == Order.table_id)
+        .where(
+            Payment.venue_id == venue_id,
+            Payment.status == "confirmed",
+            Payment.verification == "manual",
+            Payment.created_at >= today_start,
+        )
+        .order_by(Payment.created_at.desc())
+    )
+    unverified = []
+    unverified_value = 0.0
+    for pay, cashier_name, _order, table_label in unver_res.all():
+        unverified_value = round(unverified_value + float(pay.amount), 2)
+        unverified.append({
+            "payment_id": pay.id,
+            "order_id": pay.order_id,
+            "at": pay.created_at.isoformat(),
+            "by": cashier_name or "Unknown",
+            "table_label": table_label,
+            "method": pay.method,
+            "amount": float(pay.amount),
+            "reference": pay.transfer_reference,
+        })
+
     return {
         "cashiers": list(by_cashier.values()),
         "voids": voids,
         "voided_value": voided_value,
+        "unverified_transfers": unverified,
+        "unverified_count": len(unverified),
+        "unverified_value": unverified_value,
         "grand_total": round(sum(c["total"] for c in by_cashier.values()), 2),
     }
 

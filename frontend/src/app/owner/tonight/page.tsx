@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { formatNGN } from "@/lib/utils";
-import { TrendingUp, ShoppingBag, Table2, DollarSign, UtensilsCrossed, Wine, Wallet, XCircle } from "lucide-react";
+import { AlertTriangle, DollarSign, ShoppingBag, Table2, TrendingUp, UtensilsCrossed, Wallet, Wine, XCircle } from "lucide-react";
 
 interface TonightData {
   today_revenue: number;
@@ -30,6 +30,18 @@ interface ShiftReport {
     line_total: number | null;
   }[];
   voided_value: number;
+  unverified_transfers: {
+    payment_id: string;
+    order_id: string;
+    at: string;
+    by: string;
+    table_label: string | null;
+    method: string;
+    amount: number;
+    reference: string | null;
+  }[];
+  unverified_count: number;
+  unverified_value: number;
   grand_total: number;
 }
 
@@ -270,6 +282,53 @@ export default function TonightPage() {
       )}
 
       {/* Voids — the theft-watch list */}
+      {shift && shift.unverified_count > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-display text-lg font-semibold" style={{ color: "var(--text)" }}>
+              Transfers to check
+            </h2>
+            <span className="text-sm font-semibold" style={{ color: "var(--amber)" }}>
+              {formatNGN(shift.unverified_value)}
+            </span>
+          </div>
+          <p className="text-xs mb-3 leading-relaxed" style={{ color: "var(--muted)" }}>
+            Nothing confirmed these — a cashier entered them by hand. Match each
+            reference against your bank statement before closing the night.
+          </p>
+          <div
+            className="rounded-2xl overflow-hidden"
+            style={{ background: "#111827", border: "1px solid rgba(255,149,0,0.28)" }}
+          >
+            {shift.unverified_transfers.map((t, i) => (
+              <div
+                key={t.payment_id}
+                className="px-5 py-3.5 flex items-center gap-3"
+                style={{ borderTop: i > 0 ? "1px solid #1E2D42" : "none" }}
+              >
+                <AlertTriangle size={14} style={{ color: "var(--amber)", flexShrink: 0 }} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm truncate" style={{ color: "var(--text-soft)" }}>
+                    {t.table_label ?? "Unknown table"} ·{" "}
+                    <span className="font-mono text-xs">{t.reference ?? "no reference"}</span>
+                  </p>
+                  <p className="text-xs" style={{ color: "var(--muted)" }}>
+                    by {t.by} ·{" "}
+                    {new Date(t.at).toLocaleTimeString("en-NG", { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+                <p
+                  className="text-sm font-semibold tabular-nums flex-shrink-0"
+                  style={{ color: "var(--amber)" }}
+                >
+                  {formatNGN(t.amount)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {shift && shift.voids.length > 0 && (
         <div>
           <div className="flex items-center justify-between mb-4">

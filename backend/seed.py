@@ -334,15 +334,28 @@ async def seed():
         await db.flush()
 
         # ── Payments + Exit passes for paid orders ───────────────────────────
-        for order_id, v_id, amount, session in paid_orders:
+        # A realistic mix, so the shift report demonstrates what it is for: a
+        # webhook-confirmed transfer, cash counted by hand, and one transfer the
+        # cashier simply asserted — the row an owner is meant to reconcile.
+        PAYMENT_MIX = [
+            ("transfer", "gateway", "paystack", "es_demo_7f21c9a4"),
+            ("cash",     "cash",    None,       None),
+            ("transfer", "manual",  None,       "GTB/TRF/4471902"),
+        ]
+        for idx, (order_id, v_id, amount, session) in enumerate(paid_orders):
+            method, verification, provider, reference = PAYMENT_MIX[idx % len(PAYMENT_MIX)]
             pay_id = nid()
             db.add(Payment(
                 id=pay_id,
                 order_id=order_id,
                 venue_id=v_id,
                 amount=amount,
-                method="cash",
-                recorded_by=staff_ids.get("cashier"),
+                method=method,
+                verification=verification,
+                provider=provider,
+                provider_ref=reference if provider else None,
+                transfer_reference=reference if verification == "manual" else None,
+                recorded_by=None if verification == "gateway" else staff_ids.get("cashier"),
             ))
             ep_token = generate_exit_pass_token(order_id, v_id)
             db.add(ExitPass(

@@ -26,6 +26,10 @@ interface Order {
 
 type PayMethod = "cash" | "card" | "transfer" | "mobile_wallet";
 
+// Methods where the cashier is asserting money landed somewhere they cannot
+// see. Card and POS leave their own terminal receipt; these do not.
+const NEEDS_REFERENCE: PayMethod[] = ["transfer", "mobile_wallet"];
+
 const METHODS: {
   id: PayMethod;
   label: string;
@@ -76,13 +80,24 @@ function CashierContent() {
       toast.error("Confirm cash received first");
       return;
     }
+    if (NEEDS_REFERENCE.includes(method) && reference.trim().length < 4) {
+      toast.error("Enter the transfer reference from the guest's payment alert");
+      return;
+    }
     setProcessing(true);
     try {
       const endpoint = method === "cash" ? "/payments/cash" : "/payments";
       const body =
         method === "cash"
           ? { order_id: selected.id, amount: total, cash_confirmed: true }
-          : { order_id: selected.id, amount: total, method };
+          : {
+              order_id: selected.id,
+              amount: total,
+              method,
+              // Sent for every non-cash method; the API requires it for the ones
+              // where nothing but the cashier's word confirms the money arrived.
+              transfer_reference: reference.trim() || undefined,
+            };
       await api.post(endpoint, body);
       setDone(true);
       setTimeout(() => {
@@ -403,14 +418,34 @@ function CashierContent() {
                     className="block text-xs font-semibold uppercase tracking-widest mb-2"
                     style={{ color: "var(--muted)" }}
                   >
-                    Reference (optional)
+                    Reference{" "}
+                    {NEEDS_REFERENCE.includes(method) ? (
+                      <span style={{ color: "var(--amber)" }}>· required</span>
+                    ) : (
+                      <span>(optional)</span>
+                    )}
                   </label>
                   <input
                     className="input"
-                    placeholder="Transaction reference"
+                    placeholder={
+                      NEEDS_REFERENCE.includes(method)
+                        ? "e.g. GTB/TRF/4471902"
+                        : "Transaction reference"
+                    }
                     value={reference}
                     onChange={(e) => setReference(e.target.value)}
                   />
+                  {NEEDS_REFERENCE.includes(method) && (
+                    <p
+                      className="text-xs mt-2 leading-relaxed"
+                      style={{ color: "var(--muted)" }}
+                    >
+                      Nothing verifies a transfer typed in here, so it goes to the
+                      owner&apos;s shift report to be matched against the bank
+                      statement. To have it confirmed automatically, ask the guest
+                      to pay from their own phone instead.
+                    </p>
+                  )}
                 </div>
               )}
 

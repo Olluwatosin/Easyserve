@@ -30,6 +30,15 @@ class Payment(Base):
     # "confirmed" for cashier-recorded payments; gateway payments start
     # "pending" and are confirmed by the provider webhook.
     status: Mapped[str] = mapped_column(String(20), default="confirmed", nullable=False)
+    # How much this payment can be trusted:
+    #   "gateway" — a provider webhook confirmed the money moved. Trustworthy.
+    #   "cash"    — the cashier physically confirmed notes in hand.
+    #   "manual"  — the cashier asserted a transfer landed, with a reference.
+    #               Nothing verified it; this is the line the owner must review.
+    verification: Mapped[str] = mapped_column(String(20), default="manual", nullable=False)
+    # Bank narration / session ID the guest showed for a manual transfer. The
+    # thing the owner reconciles against their statement.
+    transfer_reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
     provider: Mapped[str | None] = mapped_column(String(20), nullable=True)
     provider_ref: Mapped[str | None] = mapped_column(String(100), nullable=True, unique=True)
     created_at: Mapped[datetime] = mapped_column(
@@ -38,3 +47,8 @@ class Payment(Base):
 
     order = relationship("Order", back_populates="payment")
     cashier = relationship("User", foreign_keys=[recorded_by])
+
+    @property
+    def is_verified(self) -> bool:
+        """False only for a transfer a human asserted with nothing checking it."""
+        return self.verification in ("gateway", "cash")

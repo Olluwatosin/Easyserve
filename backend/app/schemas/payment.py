@@ -1,6 +1,11 @@
 from datetime import datetime
 from typing import Literal
-from pydantic import BaseModel
+from pydantic import BaseModel, model_validator
+
+
+# Methods where the cashier is asserting money arrived somewhere they cannot
+# see. These require a reference the owner can reconcile against a statement.
+UNVERIFIABLE_METHODS = {"transfer", "mobile_wallet"}
 
 
 class PaymentCreate(BaseModel):
@@ -9,6 +14,19 @@ class PaymentCreate(BaseModel):
     method: Literal["cash", "transfer", "pos", "card", "mobile_wallet"]
     is_split: bool = False
     split_data: dict | None = None
+    # Bank narration or session ID shown by the guest. Required for transfers.
+    transfer_reference: str | None = None
+
+    @model_validator(mode="after")
+    def _reference_required_for_transfers(self) -> "PaymentCreate":
+        if self.method in UNVERIFIABLE_METHODS:
+            ref = (self.transfer_reference or "").strip()
+            if len(ref) < 4:
+                raise ValueError(
+                    "Enter the transfer reference from the guest's payment alert"
+                )
+            self.transfer_reference = ref
+        return self
 
 
 class CashPaymentCreate(BaseModel):
@@ -37,6 +55,8 @@ class PaymentResponse(BaseModel):
     split_data: dict | None
     status: str
     provider: str | None
+    verification: str
+    transfer_reference: str | None
     created_at: datetime
 
     model_config = {"from_attributes": True}
