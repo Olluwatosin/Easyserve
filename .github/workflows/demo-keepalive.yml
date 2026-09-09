@@ -37,15 +37,27 @@ jobs:
             echo "::error::DEMO_API_URL repository variable is not set"
             exit 1
           fi
-          # Generous timeout: a cold start is exactly the case we're paying for.
-          code=$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 90 "$API/health") || true
-          echo "HTTP $code"
+          # A cold start is exactly the case we are paying for, and two can stack:
+          # Render wakes the container (~35-55s) and Neon wakes the branch from
+          # scale-to-zero on the first query, which the boot-time migration makes.
+          # A single 90s attempt is not enough headroom, so retry with a real budget.
+          code=000
+          for attempt in 1 2 3 4 5; do
+            code=$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 120 "$API/health") || code=000
+            if [ "$code" = "200" ]; then
+              echo "Awake after attempt $attempt"
+              break
+            fi
+            echo "Attempt $attempt: HTTP $code — still waking, retrying in 15s"
+            sleep 15
+          done
           cat /tmp/health.json 2>/dev/null || true
           echo
-          # 503 means the app is up but Postgres is unreachable — worth failing on,
-          # because that is the demo being broken rather than merely asleep.
+          # curl reports 000 when it never got a response at all (timeout / no
+          # connection). 503 means the app is up but Postgres is unreachable —
+          # that one is a genuinely broken demo, not merely a sleeping one.
           if [ "$code" != "200" ]; then
-            echo "::error::Demo backend unhealthy (HTTP $code)"
+            echo "::error::Demo backend unhealthy after 5 attempts (last: HTTP $code)"
             exit 1
           fi
 
@@ -64,7 +76,7 @@ jobs:
             echo "::error::DEMO_RESET_TOKEN secret is not set"
             exit 1
           fi
-          code=$(curl -sS -X POST -o /tmp/reset.json -w '%{http_code}' --max-time 120 \
+          code=$(curl -sS -X POST -o /tmp/reset.json -w '%{http_code}' --max-time 180 \
             -H "X-Demo-Token: $TOKEN" "$API/api/v1/demo/reset") || true
           echo "HTTP $code"
           cat /tmp/reset.json 2>/dev/null || true
