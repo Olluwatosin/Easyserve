@@ -7,6 +7,7 @@ import { getRoleHome } from "@/components/AuthGuard";
 import { Eye, EyeOff } from "lucide-react";
 import toast from "react-hot-toast";
 import { EsLogo } from "@/components/EsLogo";
+import { publicApi } from "@/lib/publicApi";
 
 // Self-hosted gradient backdrop — no third-party image dependency at runtime.
 const HERO_BG =
@@ -23,8 +24,30 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotBusy, setForgotBusy] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
   const { login, loading } = useAuthStore();
   const router = useRouter();
+
+  async function handleForgot() {
+    const target = (forgotEmail || email).trim();
+    if (!target) {
+      toast.error("Enter your email address first");
+      return;
+    }
+    setForgotBusy(true);
+    try {
+      await publicApi.post("/auth/forgot-password", { email: target });
+    } catch {
+      // Deliberately ignored. The endpoint answers identically for registered
+      // and unregistered addresses so it cannot be used to discover who has an
+      // account; surfacing an error here would leak exactly that.
+    } finally {
+      setForgotBusy(false);
+      setForgotSent(true);
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -218,27 +241,48 @@ export default function LoginPage() {
 
             {showForgot && (
               <div
-                className="rounded-xl p-4 text-xs space-y-2 animate-fade-in"
+                className="rounded-xl p-4 text-xs space-y-3 animate-fade-in"
                 style={{
                   background: "rgba(0,212,180,0.06)",
                   border: "1px solid rgba(0,212,180,0.2)",
                 }}
               >
-                <p className="font-semibold" style={{ color: "var(--teal)" }}>
-                  Password reset
-                </p>
-                <p style={{ color: "var(--text-soft)" }}>
-                  <strong>Venue owner?</strong> Log in and go to{" "}
-                  <span style={{ color: "var(--teal)" }}>Settings → Change Password</span>{" "}
-                  to update it. If you&apos;re locked out, email{" "}
-                  <a href="mailto:support@easyserve.ng" style={{ color: "var(--teal)" }}>
-                    support@easyserve.ng
-                  </a>
-                  .
-                </p>
-                <p style={{ color: "var(--muted)" }}>
-                  <strong>Staff member?</strong> Ask your venue manager to reset your PIN from the Staff page.
-                </p>
+                {forgotSent ? (
+                  <p style={{ color: "var(--text-soft)" }}>
+                    If <strong>{forgotEmail || email}</strong> has an account, a
+                    reset link is on its way. It expires in 30 minutes. Check
+                    your spam folder if it doesn&apos;t arrive.
+                  </p>
+                ) : (
+                  <>
+                    <p className="font-semibold" style={{ color: "var(--teal)" }}>
+                      Reset your password
+                    </p>
+                    <p style={{ color: "var(--text-soft)" }}>
+                      We&apos;ll email you a link to set a new one.
+                    </p>
+                    <input
+                      className="input"
+                      type="email"
+                      placeholder="you@venue.com"
+                      value={forgotEmail || email}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      autoComplete="email"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleForgot}
+                      disabled={forgotBusy}
+                      className="btn-teal w-full"
+                    >
+                      {forgotBusy ? "Sending…" : "Send reset link"}
+                    </button>
+                    <p style={{ color: "var(--muted)" }}>
+                      <strong>Staff member?</strong> Ask your venue manager to
+                      reset your PIN from the Staff page.
+                    </p>
+                  </>
+                )}
               </div>
             )}
 

@@ -11,9 +11,10 @@ from app.models.exit_pass import ExitPass
 from app.models.alert import Alert
 from app.models.feedback import Feedback
 from app.models.audit_log import AuditLog
+from app.models.password_reset import PasswordResetToken
 
 __all__ = [
     "Venue", "User", "Table", "MenuCategory", "MenuItem",
     "Promo", "Order", "OrderItem", "Payment", "ExitPass",
-    "Alert", "Feedback", "AuditLog",
+    "Alert", "Feedback", "AuditLog", "PasswordResetToken",
 ]

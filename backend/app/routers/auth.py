@@ -6,8 +6,19 @@ from app.dependencies import get_current_user
 from app.utils.limiter import limiter
 from app.utils.security import hash_password, verify_password
 from app.models.user import User
-from app.schemas.auth import ChangePasswordRequest, LoginRequest, PinLoginRequest, RefreshRequest, RegisterRequest, TokenResponse, UserResponse
-from app.services import auth_service
+from app.schemas.auth import (
+    ChangePasswordRequest,
+    ForgotPasswordRequest,
+    LoginRequest,
+    PinLoginRequest,
+    RefreshRequest,
+    RegisterRequest,
+    ResetPasswordRequest,
+    TokenResponse,
+    UserResponse,
+)
+from app.services import auth_service, password_reset_service
+from app.utils.limiter import client_ip
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -56,3 +67,44 @@ async def change_password(
     # Invalidate every existing session (access + refresh) issued before now.
     current_user.tokens_valid_after = datetime.now(timezone.utc)
     await db.commit()
+
+
+@router.post("/forgot-password", status_code=204)
+@limiter.limit("4/hour")
+async def forgot_password(
+    request: Request,
+    req: ForgotPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Send a reset link.
+
+    Always 204, whether or not the address is registered — a different response
+    for a known address would turn this into an account-enumeration oracle.
+    Rate limited because it is unauthenticated and sends mail on demand.
+    """
+    await password_reset_service.request_reset(db, req.email, client_ip(request))
+    return None
+
+
+@router.post("/reset-password", status_code=204)
+@limiter.limit("10/hour")
+async def reset_password(
+    request: Request,
+    req: ResetPasswordRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Consume a reset token and set a new password.
+
+    Rate limited so the token cannot be brute-forced, though 32 random bytes
+    makes that infeasible anyway.
+    """
+    try:
+        ok = await password_reset_service.reset_password(db, req.token, req.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if not ok:
+        raise HTTPException(
+            status_code=400,
+            detail="This reset link is invalid or has expired. Request a new one.",
+        )
+    return None

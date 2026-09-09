@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     PAYSTACK_SECRET_KEY: str = ""
     # Optional Sentry error tracking (no-op when empty).
     SENTRY_DSN: str = ""
+    # Password recovery. Without RESEND_API_KEY + MAIL_FROM the reset link is
+    # logged instead of emailed — fine for dev, never for production.
+    RESEND_API_KEY: str = ""
+    MAIL_FROM: str = ""
+    PASSWORD_RESET_EXPIRE_MINUTES: int = 30
     # Public demo only. The reset endpoint also requires ENVIRONMENT="demo",
     # so setting this in production still cannot wipe a real venue.
     DEMO_RESET_TOKEN: str = ""
