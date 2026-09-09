@@ -215,6 +215,12 @@ WebSocket events between them.
 Pushing to `main` triggers CI and SSH-deploys via the `VPS_HOST`, `VPS_USER`,
 `VPS_SSH_KEY` and `VPS_PATH` repository secrets.
 
+The deploy job is gated on a repository **variable** `VPS_CONFIGURED=true`, so it
+stays skipped until a server actually exists. Set the four secrets, then set that
+variable to switch it on. Without the gate the job fails on every push purely
+because the secrets are unset, which teaches you to ignore a red CI — the one
+thing CI must never do.
+
 ### Free demo
 
 Vercel (frontend) + Render (backend) + Neon (Postgres), no Redis, single worker.

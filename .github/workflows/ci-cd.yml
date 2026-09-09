@@ -93,7 +93,13 @@ jobs:
     name: Deploy to VPS
     runs-on: ubuntu-latest
     needs: [backend, frontend]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Skip entirely until a VPS is actually configured. Without this the job
+    # fails red on every push to main purely because the secrets are unset,
+    # which trains you to ignore a red X — the one thing CI must never do.
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      vars.VPS_CONFIGURED == 'true'
     steps:
       - name: SSH deploy
         uses: appleboy/ssh-action@v1.0.3
