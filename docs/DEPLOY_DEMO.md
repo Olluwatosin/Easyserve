@@ -98,7 +98,14 @@ by hand.
 
 ## 2. Backend — Render
 
-1. New → **Blueprint**, point it at this repo. Render reads `render.yaml`.
+> Must be created as a **Blueprint** in the dashboard. The Render MCP server's
+> `create_web_service` tool explicitly does not support Docker services, and this
+> backend builds from `backend/Dockerfile`. Once the service exists, MCP *can*
+> manage it — env vars, deploys, logs, metrics.
+
+1. Go to <https://dashboard.render.com/blueprints> → **New Blueprint Instance**,
+   select this repo, and pick the branch holding `render.yaml`. Render reads it
+   and pre-fills everything except the secrets.
 2. Fill in the variables it marks as required:
 
 | Variable | Value |
