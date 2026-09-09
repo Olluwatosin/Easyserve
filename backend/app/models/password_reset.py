@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, String, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -24,6 +24,10 @@ class PasswordResetToken(Base):
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    # "email" sends a long random link; "whatsapp" sends a 6-digit code, which
+    # has a far smaller keyspace and so is guarded by attempts + a short expiry.
+    channel: Mapped[str] = mapped_column(String(20), default="email", nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Recorded for the audit trail: who asked, from where.
@@ -34,8 +38,15 @@ class PasswordResetToken(Base):
 
     user = relationship("User")
 
+    #: A 6-digit code is guessable in a way a 32-byte token is not, so cap the
+    #: tries. Five is enough for fat fingers and nowhere near enough to search
+    #: a million codes.
+    MAX_ATTEMPTS = 5
+
     @property
     def is_usable(self) -> bool:
         if self.used_at is not None:
+            return False
+        if (self.attempts or 0) >= self.MAX_ATTEMPTS:
             return False
         return datetime.now(timezone.utc) < self.expires_at

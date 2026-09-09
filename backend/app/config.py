@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     RESEND_API_KEY: str = ""
     MAIL_FROM: str = ""
     PASSWORD_RESET_EXPIRE_MINUTES: int = 30
+    # WhatsApp recovery (Meta Cloud API). Unset = codes are logged, not sent.
+    WHATSAPP_TOKEN: str = ""
+    WHATSAPP_PHONE_NUMBER_ID: str = ""
+    WHATSAPP_RESET_TEMPLATE: str = "password_reset"
+    # Codes are short, so they live shorter than links.
+    PASSWORD_RESET_CODE_EXPIRE_MINUTES: int = 10
     # Public demo only. The reset endpoint also requires ENVIRONMENT="demo",
     # so setting this in production still cannot wipe a real venue.
     DEMO_RESET_TOKEN: str = ""

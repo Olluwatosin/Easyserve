@@ -25,20 +25,28 @@ export default function LoginPage() {
   const [showPw, setShowPw] = useState(false);
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotPhone, setForgotPhone] = useState("");
+  const [forgotVia, setForgotVia] = useState<"email" | "whatsapp">("email");
   const [forgotBusy, setForgotBusy] = useState(false);
   const [forgotSent, setForgotSent] = useState(false);
   const { login, loading } = useAuthStore();
   const router = useRouter();
 
   async function handleForgot() {
-    const target = (forgotEmail || email).trim();
+    const viaWhatsApp = forgotVia === "whatsapp";
+    const target = viaWhatsApp ? forgotPhone.trim() : (forgotEmail || email).trim();
     if (!target) {
-      toast.error("Enter your email address first");
+      toast.error(
+        viaWhatsApp ? "Enter your phone number first" : "Enter your email address first",
+      );
       return;
     }
     setForgotBusy(true);
     try {
-      await publicApi.post("/auth/forgot-password", { email: target });
+      await publicApi.post(
+        "/auth/forgot-password",
+        viaWhatsApp ? { phone: target } : { email: target },
+      );
     } catch {
       // Deliberately ignored. The endpoint answers identically for registered
       // and unregistered addresses so it cannot be used to discover who has an
@@ -46,6 +54,7 @@ export default function LoginPage() {
     } finally {
       setForgotBusy(false);
       setForgotSent(true);
+      if (viaWhatsApp) router.push(`/reset-password?phone=${encodeURIComponent(target)}`);
     }
   }
 
@@ -249,33 +258,80 @@ export default function LoginPage() {
               >
                 {forgotSent ? (
                   <p style={{ color: "var(--text-soft)" }}>
-                    If <strong>{forgotEmail || email}</strong> has an account, a
-                    reset link is on its way. It expires in 30 minutes. Check
-                    your spam folder if it doesn&apos;t arrive.
+                    If <strong>{forgotVia === "whatsapp" ? forgotPhone : forgotEmail || email}</strong>{" "}
+                    has an account, a reset {forgotVia === "whatsapp" ? "code" : "link"} is on its
+                    way. Check your spam folder if it doesn&apos;t arrive.
                   </p>
                 ) : (
                   <>
                     <p className="font-semibold" style={{ color: "var(--teal)" }}>
                       Reset your password
                     </p>
-                    <p style={{ color: "var(--text-soft)" }}>
-                      We&apos;ll email you a link to set a new one.
-                    </p>
-                    <input
-                      className="input"
-                      type="email"
-                      placeholder="you@venue.com"
-                      value={forgotEmail || email}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      autoComplete="email"
-                    />
+
+                    <div className="flex gap-2">
+                      {(["whatsapp", "email"] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          onClick={() => setForgotVia(mode)}
+                          className="flex-1 rounded-lg px-3 py-2 text-xs font-medium transition-colors"
+                          style={{
+                            background:
+                              forgotVia === mode ? "rgba(0,212,180,0.16)" : "transparent",
+                            border: `1px solid ${
+                              forgotVia === mode
+                                ? "rgba(0,212,180,0.45)"
+                                : "rgba(255,255,255,0.10)"
+                            }`,
+                            color: forgotVia === mode ? "var(--teal)" : "var(--muted)",
+                          }}
+                        >
+                          {mode === "whatsapp" ? "WhatsApp" : "Email"}
+                        </button>
+                      ))}
+                    </div>
+
+                    {forgotVia === "whatsapp" ? (
+                      <>
+                        <p style={{ color: "var(--text-soft)" }}>
+                          We&apos;ll send a 6-digit code to your WhatsApp.
+                        </p>
+                        <input
+                          className="input"
+                          type="tel"
+                          inputMode="tel"
+                          placeholder="08012345678"
+                          value={forgotPhone}
+                          onChange={(e) => setForgotPhone(e.target.value)}
+                          autoComplete="tel"
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <p style={{ color: "var(--text-soft)" }}>
+                          We&apos;ll email you a link to set a new one.
+                        </p>
+                        <input
+                          className="input"
+                          type="email"
+                          placeholder="you@venue.com"
+                          value={forgotEmail || email}
+                          onChange={(e) => setForgotEmail(e.target.value)}
+                          autoComplete="email"
+                        />
+                      </>
+                    )}
                     <button
                       type="button"
                       onClick={handleForgot}
                       disabled={forgotBusy}
                       className="btn-teal w-full"
                     >
-                      {forgotBusy ? "Sending…" : "Send reset link"}
+                      {forgotBusy
+                        ? "Sending…"
+                        : forgotVia === "whatsapp"
+                          ? "Send code on WhatsApp"
+                          : "Send reset link"}
                     </button>
                     <p style={{ color: "var(--muted)" }}>
                       <strong>Staff member?</strong> Ask your venue manager to

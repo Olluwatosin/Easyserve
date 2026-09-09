@@ -14,7 +14,12 @@ const HERO_BG =
 function ResetPasswordForm() {
   const params = useSearchParams();
   const router = useRouter();
-  const token = params.get("token") ?? "";
+  // Arriving from the email link carries ?token=… ; from the WhatsApp flow it
+  // carries ?phone=… and the 6-digit code is typed in below.
+  const linkToken = params.get("token") ?? "";
+  const phone = params.get("phone") ?? "";
+  const byCode = !linkToken && !!phone;
+  const [code, setCode] = useState("");
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -35,11 +40,16 @@ function ResetPasswordForm() {
       toast.error("Passwords do not match");
       return;
     }
+    if (byCode && !/^\d{6}$/.test(code.trim())) {
+      toast.error("Enter the 6-digit code from WhatsApp");
+      return;
+    }
     setBusy(true);
     try {
       await publicApi.post("/auth/reset-password", {
-        token,
+        token: byCode ? code.trim() : linkToken,
         new_password: password,
+        ...(byCode ? { phone } : {}),
       });
       setDone(true);
     } catch (err: unknown) {
@@ -52,7 +62,7 @@ function ResetPasswordForm() {
     }
   }
 
-  if (!token) {
+  if (!linkToken && !phone) {
     return (
       <div className="card p-6 space-y-3 text-sm">
         <p className="font-semibold" style={{ color: "var(--amber)" }}>
@@ -91,6 +101,31 @@ function ResetPasswordForm() {
 
   return (
     <form onSubmit={handleSubmit} className="card p-6 space-y-4">
+      {byCode && (
+        <div>
+          <label
+            className="block text-sm font-medium mb-1.5"
+            style={{ color: "var(--text-soft)" }}
+          >
+            Code from WhatsApp
+          </label>
+          <input
+            className="input text-center tracking-[0.4em] text-lg"
+            type="text"
+            inputMode="numeric"
+            maxLength={6}
+            placeholder="000000"
+            value={code}
+            onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+            autoComplete="one-time-code"
+            autoFocus
+          />
+          <p className="text-xs mt-1.5" style={{ color: "var(--muted)" }}>
+            Sent to {phone}. Expires in 10 minutes.
+          </p>
+        </div>
+      )}
+
       <div>
         <label
           className="block text-sm font-medium mb-1.5"
@@ -107,7 +142,6 @@ function ResetPasswordForm() {
             onChange={(e) => setPassword(e.target.value)}
             required
             autoComplete="new-password"
-            autoFocus
           />
           <button
             type="button"
@@ -159,7 +193,9 @@ function ResetPasswordForm() {
       </button>
 
       <p className="text-xs text-center" style={{ color: "var(--muted)" }}>
-        Reset links expire after 30 minutes and work only once.
+        {byCode
+          ? "Codes expire after 10 minutes and lock after 5 wrong tries."
+          : "Reset links expire after 30 minutes and work only once."}
       </p>
     </form>
   );

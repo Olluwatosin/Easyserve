@@ -6,6 +6,7 @@ from app.dependencies import get_current_user
 from app.utils.limiter import limiter
 from app.utils.security import hash_password, verify_password
 from app.models.user import User
+from sqlalchemy import select
 from app.schemas.auth import (
     ChangePasswordRequest,
     ForgotPasswordRequest,
@@ -14,10 +15,11 @@ from app.schemas.auth import (
     RefreshRequest,
     RegisterRequest,
     ResetPasswordRequest,
+    SetPhoneRequest,
     TokenResponse,
     UserResponse,
 )
-from app.services import auth_service, password_reset_service
+from app.services import auth_service, password_reset_service, whatsapp_service
 from app.utils.limiter import client_ip
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -82,7 +84,9 @@ async def forgot_password(
     for a known address would turn this into an account-enumeration oracle.
     Rate limited because it is unauthenticated and sends mail on demand.
     """
-    await password_reset_service.request_reset(db, req.email, client_ip(request))
+    await password_reset_service.request_reset(
+        db, email=req.email, phone=req.phone, client_ip=client_ip(request)
+    )
     return None
 
 
@@ -99,7 +103,9 @@ async def reset_password(
     makes that infeasible anyway.
     """
     try:
-        ok = await password_reset_service.reset_password(db, req.token, req.new_password)
+        ok = await password_reset_service.reset_password(
+            db, req.token, req.new_password, phone=req.phone
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     if not ok:
@@ -107,4 +113,39 @@ async def reset_password(
             status_code=400,
             detail="This reset link is invalid or has expired. Request a new one.",
         )
+    return None
+
+
+@router.post("/recovery-phone", status_code=204)
+async def set_recovery_phone(
+    req: SetPhoneRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Set the WhatsApp number for password recovery.
+
+    Requires an active session, so it carries the same trust as changing the
+    password directly — someone already signed in could do that anyway. Numbers
+    are normalised to E.164 so 0801…, 234801… and +234 801… all resolve to the
+    same account at recovery time.
+    """
+    normalised = whatsapp_service.normalise_phone(req.phone)
+    if normalised is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Enter a valid phone number, e.g. 08012345678",
+        )
+
+    existing = await db.execute(
+        select(User).where(User.phone == normalised, User.id != current_user.id)
+    )
+    if existing.scalar_one_or_none() is not None:
+        # Two accounts sharing a number would make recovery ambiguous.
+        raise HTTPException(
+            status_code=409,
+            detail="That number is already used for recovery on another account",
+        )
+
+    current_user.phone = normalised
+    await db.commit()
     return None

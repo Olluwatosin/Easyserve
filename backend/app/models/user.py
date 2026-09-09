@@ -21,6 +21,9 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # E.164, e.g. +2348012345678. Used for WhatsApp password recovery.
+    # Set while signed in, so it carries the same trust as changing the email.
+    phone: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     # Tokens issued (iat) before this instant are rejected — used to log out all
     # sessions on password change. Null means no cut-off.
     tokens_valid_after: Mapped[datetime | None] = mapped_column(
