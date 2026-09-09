@@ -407,7 +407,7 @@ export default function PinLoginPage() {
                 )}
 
                 <p className="text-xs text-center mt-5" style={{ color: "var(--muted)" }}>
-                  Each role has a unique PIN · Contact your manager if you've forgotten yours
+                  Each role has a unique PIN · Contact your manager if you&apos;ve forgotten yours
                 </p>
               </div>
             )}
