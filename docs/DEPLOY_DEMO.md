@@ -34,24 +34,65 @@ openssl rand -hex 32   # DEMO_RESET_TOKEN
 
 ## 1. Database — Neon
 
-1. Create a project at [neon.tech](https://neon.tech). Pick the region closest to
-   Nigeria (usually `eu-central-1`).
-2. Copy the **pooled** connection string.
-3. Rewrite it for SQLAlchemy's async driver:
+**Already provisioned.**
+
+| | |
+|---|---|
+| Project | `easyserve-eu` — `lucky-lake-82452941` |
+| Org | `org-soft-bread-87250199` |
+| Region | `aws-eu-central-1` (Frankfurt) |
+| Branch | `production` — `br-wispy-cake-b27h8kvi` |
+| Object storage | bucket `images`, private |
+
+The region is not arbitrary. **It must match the Render service's region**
+(`frankfurt` in `render.yaml`). The backend issues many queries per request, so
+backend-to-database latency compounds — a Frankfurt service against an Ohio
+database puts a transatlantic round trip on every one of them. Colocation
+matters far more here than distance to Lagos.
+
+The repo is linked (`.neon`), and `neon deploy` keeps `.env.local` populated
+with `DATABASE_URL`, the S3 credentials for the bucket, and friends. Both files
+are gitignored.
+
+### Converting the URL for asyncpg
+
+Neon hands you a URL that EasyServe **cannot use as-is**:
 
 ```
-postgresql+asyncpg://USER:PASSWORD@HOST/DBNAME?ssl=require
+postgresql://USER:PASS@HOST/neondb?channel_binding=require&sslmode=require
 ```
 
-**Two edits that will cost you an hour if you miss them:**
+Three edits are required:
 
-- The scheme must be `postgresql+asyncpg://`, not `postgres://`.
-- The SSL parameter must be **`?ssl=require`**. Neon hands you
-  `?sslmode=require`, which asyncpg does not understand and which fails with a
-  confusing `invalid dsn` error. Also strip `&channel_binding=...` if present.
+| Neon gives you | EasyServe needs | Why |
+|---|---|---|
+| `postgresql://` | `postgresql+asyncpg://` | SQLAlchemy async driver selection |
+| `sslmode=require` | `ssl=require` | asyncpg doesn't understand `sslmode` |
+| `channel_binding=require` | *(remove)* | asyncpg doesn't accept it |
+
+Get the converted string with:
+
+```bash
+neon env pull                      # refresh .env.local
+python3 - <<'EOF'
+import re, urllib.parse as u
+url = next(l.split("=",1)[1].strip().strip('"')
+           for l in open(".env.local") if l.startswith("DATABASE_URL="))
+p = u.urlsplit(url)
+q = u.parse_qs(p.query)
+q.pop("channel_binding", None)
+if q.pop("sslmode", None): q["ssl"] = ["require"]
+print(u.urlunsplit(("postgresql+asyncpg", p.netloc, p.path,
+                    u.urlencode(q, doseq=True), "")))
+EOF
+```
+
+Paste that result into Render as `DATABASE_URL`. Use the **pooled** host (the
+one with `-pooler`) — the free tier has a low connection limit and the backend
+runs a connection pool of its own.
 
 Migrations run automatically when the backend boots, so there's nothing to run
-here by hand.
+by hand.
 
 ---
 
