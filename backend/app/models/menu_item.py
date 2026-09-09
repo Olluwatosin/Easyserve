@@ -25,6 +25,10 @@ class MenuItem(Base):
     image_url: Mapped[str | None] = mapped_column(Text)
     item_type: Mapped[str] = mapped_column(String(20), default="other", nullable=False)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Units on hand. NULL means this item is not stock-tracked — a cocktail
+    # made to order has no meaningful count, a bottle of Hennessy does.
+    stock_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Warn the owner at or below this level.
     stock_threshold: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     order_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

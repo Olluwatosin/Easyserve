@@ -9,9 +9,11 @@ from app.models.order import Order
 from app.models.order_item import OrderItem
 from app.models.table import Table
 from app.models.user import User
+from app.models.menu_item import MenuItem
 from app.models.venue import Venue
 from app.schemas.order import ItemStatusUpdate, OrderAssign, OrderResponse
 from app.services.audit_service import log_action
+from app.services import stock_service
 from app.services.order_service import apply_bill_charges
 from app.services.routing_service import broadcast_item_ready
 from app.services.ws_manager import manager
@@ -133,6 +135,19 @@ async def update_item_status(
                 "previous_status": item.status,
             },
         )
+
+        # Put the stock back. Without this every void reads as shrinkage on the
+        # variance report, and the report that is meant to reveal theft becomes
+        # the one nobody trusts.
+        if item.menu_item_id:
+            mi_res = await db.execute(
+                select(MenuItem).where(MenuItem.id == item.menu_item_id)
+            )
+            menu_item = mi_res.scalar_one_or_none()
+            if menu_item is not None:
+                await stock_service.restore_for_void(
+                    db, menu_item, item.quantity, order.id, current_user.id
+                )
 
     item.status = req.status
 

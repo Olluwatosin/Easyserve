@@ -13,6 +13,7 @@ from app.models.venue import Venue
 from app.schemas.order import PlaceOrderRequest
 from app.services.routing_service import determine_route, route_new_order
 from app.services.promo_service import get_active_promos, apply_promo
+from app.services import stock_service
 
 
 def apply_bill_charges(order: Order, venue: Venue) -> None:
@@ -53,6 +54,7 @@ async def place_order(db: AsyncSession, qr_token: str, req: PlaceOrderRequest) -
 
     # Build order items
     order_items = []
+    stock_deductions: list[tuple[MenuItem, int]] = []
     total = 0.0
     for inp in req.items:
         res = await db.execute(
@@ -75,6 +77,9 @@ async def place_order(db: AsyncSession, qr_token: str, req: PlaceOrderRequest) -
         )
         # increment order_count
         item.order_count += inp.quantity
+        # Depletion is deferred until the order id exists (below); remember what
+        # to take off the shelf.
+        stock_deductions.append((item, inp.quantity))
         total += effective_price * inp.quantity
         order_items.append(order_item)
 
@@ -99,6 +104,8 @@ async def place_order(db: AsyncSession, qr_token: str, req: PlaceOrderRequest) -
         apply_bill_charges(existing_order, venue)
         if req.customer_phone and not existing_order.customer_phone:
             existing_order.customer_phone = req.customer_phone
+        for menu_item, qty in stock_deductions:
+            await stock_service.deplete_for_sale(db, menu_item, qty, existing_order.id)
         await db.commit()
         result = await db.execute(
             select(Order).where(Order.id == existing_order.id).options(selectinload(Order.items))
@@ -122,6 +129,9 @@ async def place_order(db: AsyncSession, qr_token: str, req: PlaceOrderRequest) -
         for oi in order_items:
             oi.order_id = order.id
             db.add(oi)
+
+        for menu_item, qty in stock_deductions:
+            await stock_service.deplete_for_sale(db, menu_item, qty, order.id)
 
         await db.commit()
         result = await db.execute(

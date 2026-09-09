@@ -237,16 +237,27 @@ async def get_feedback_summary(db: AsyncSession, venue_id: str) -> dict:
 
 
 async def get_inventory_alerts(db: AsyncSession, venue_id: str) -> list[dict]:
+    """Items at or below their reorder level.
+
+    Previously this compared lifetime order_count against the threshold, which
+    is not a stock level — it only ever grew, so every popular item eventually
+    "ran low" and stayed there. Now that items carry a real quantity, the alert
+    means what its name says.
+    """
     result = await db.execute(
-        select(MenuItem).where(
+        select(MenuItem)
+        .where(
             MenuItem.venue_id == venue_id,
-            MenuItem.order_count >= MenuItem.stock_threshold,
+            MenuItem.stock_quantity.isnot(None),
+            MenuItem.stock_quantity <= MenuItem.stock_threshold,
             MenuItem.is_available == True,
         )
+        .order_by(MenuItem.stock_quantity)
     )
     return [
         {"item_id": i.id, "name": i.name, "item_type": i.item_type,
-         "order_count": i.order_count, "stock_threshold": i.stock_threshold}
+         "stock_quantity": i.stock_quantity, "stock_threshold": i.stock_threshold,
+         "is_out": (i.stock_quantity or 0) == 0}
         for i in result.scalars().all()
     ]
 

@@ -2,18 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  LayoutDashboard,
-  UtensilsCrossed,
-  Table2,
-  Users,
-  Tag,
-  BarChart3,
-  Settings,
-  LogOut,
-  ShoppingBag,
-  Moon,
-} from "lucide-react";
+import { BarChart3, LayoutDashboard, LogOut, Moon, Package, Settings, ShoppingBag, Table2, Tag, Users, UtensilsCrossed } from "lucide-react";
 import AuthGuard from "@/components/AuthGuard";
 import { EsLogo } from "@/components/EsLogo";
 import { useAuthStore } from "@/stores/auth";
@@ -25,6 +14,7 @@ const nav = [
   { href: "/owner/orders", label: "Orders", icon: ShoppingBag },
   { href: "/owner/tables", label: "Tables", icon: Table2 },
   { href: "/owner/menu", label: "Menu", icon: UtensilsCrossed },
+  { href: "/owner/stock", label: "Stock", icon: Package },
   { href: "/owner/promos", label: "Promos", icon: Tag },
   { href: "/owner/staff", label: "Staff", icon: Users },
   { href: "/owner/analytics", label: "Analytics", icon: BarChart3 },

@@ -96,6 +96,17 @@ TABLES = [
     ("Bar",     "Bar",        2),
 ]
 
+# Opening stock for the demo: a couple deliberately low so the alerts have
+# something to show, and one at zero so "out of stock" is visible too.
+STOCK_LEVELS = {
+    "Hennessy XO": 2,
+    "Ace of Spades (Gold)": 0,
+    "Dom Pérignon": 3,
+    "Moët & Chandon": 11,
+    "Hennessy VS": 24,
+    "Johnnie Walker Black": 16,
+}
+
 STAFF = [
     # (full_name, email, role, zone, pin)
     ("Emeka Okafor",  "emeka@grandnoir.com",  "bartender", "Main Bar",   "1111"),
@@ -194,6 +205,9 @@ async def seed():
             for name, price, itype, desc in items:
                 iid = nid()
                 item_map[name] = (iid, price, itype)
+                # Bottles and packages are counted; cocktails mixed to order
+                # and kitchen plates are not, which is how a real bar works.
+                tracked = cat_name in ("Premium Spirits", "Bottles & Packages")
                 db.add(MenuItem(
                     id=iid,
                     venue_id=venue_id,
@@ -202,8 +216,14 @@ async def seed():
                     price=price,
                     item_type=itype,
                     description=desc,
+                    stock_quantity=STOCK_LEVELS.get(name, 18) if tracked else None,
+                    stock_threshold=3 if tracked else 10,
                 ))
         await db.flush()
+
+        _known = {n for _, _, items in MENU for n, *_ in items}
+        _typos = set(STOCK_LEVELS) - _known
+        assert not _typos, f"STOCK_LEVELS names not on the menu: {sorted(_typos)}"
 
         # ── Promos ───────────────────────────────────────────────────────────
         # Windows deliberately span the whole day. A real venue's happy hour is

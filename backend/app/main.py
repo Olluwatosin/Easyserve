@@ -45,6 +45,7 @@ from app.routers import (
     staff,
     websocket,
     demo,
+    stock,
 )
 from app.services.ws_manager import manager
 
@@ -87,6 +88,7 @@ app.include_router(promos.router, prefix="/api/v1")
 app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(staff.router, prefix="/api/v1")
 app.include_router(demo.router, prefix="/api/v1")
+app.include_router(stock.router, prefix="/api/v1")
 app.include_router(websocket.router)
 
 

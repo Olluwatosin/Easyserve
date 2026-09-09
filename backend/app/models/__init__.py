@@ -12,9 +12,10 @@ from app.models.alert import Alert
 from app.models.feedback import Feedback
 from app.models.audit_log import AuditLog
 from app.models.password_reset import PasswordResetToken
+from app.models.stock_movement import StockMovement
 
 __all__ = [
     "Venue", "User", "Table", "MenuCategory", "MenuItem",
     "Promo", "Order", "OrderItem", "Payment", "ExitPass",
-    "Alert", "Feedback", "AuditLog", "PasswordResetToken",
+    "Alert", "Feedback", "AuditLog", "PasswordResetToken", "StockMovement",
 ]
