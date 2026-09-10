@@ -88,3 +88,32 @@ def test_unassigned_tables_open_to_the_floor_immediately():
 def test_an_assigned_table_starts_with_its_own_attendant():
     a = _alert(assigned_to="u1")
     assert a.escalation_level == 0
+
+
+# ── Authorisation ────────────────────────────────────────────────────────────
+
+def test_a_plan_gate_is_not_an_authorisation_check():
+    """require_plan asks what the venue pays for, not who is asking. Used alone
+    it let any signed-in user at a Growth venue — a bartender on a shared floor
+    PIN, the door staff — read owner analytics including colleagues' scores."""
+    import inspect
+
+    from app.dependencies import require_plan
+
+    sig = inspect.signature(require_plan)
+    assert "roles" in sig.parameters, "require_plan must constrain role as well as plan"
+    assert sig.parameters["roles"].default == ("owner",), (
+        "plan-gated endpoints are owner-facing; widening must be deliberate"
+    )
+
+
+def test_plan_gated_analytics_stay_owner_only():
+    """Guards against a future endpoint quietly widening the gate."""
+    import re
+    import pathlib
+
+    src = pathlib.Path("app/routers/analytics.py").read_text()
+    for call in re.findall(r"require_plan\(([^)]*)\)", src):
+        assert "roles" not in call, (
+            "an analytics endpoint widened its roles; confirm that is intended"
+        )

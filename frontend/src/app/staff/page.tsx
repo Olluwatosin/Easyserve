@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { WS_URL } from "@/lib/env";
 
 interface Alert {
+  acknowledged_by: string | null;
   id: string;
   type: string;
   status: string;
@@ -160,7 +161,18 @@ function StaffContent() {
     loadAlerts();
   }
 
+  async function resolveAlert(id: string) {
+    await api.patch(`/alerts/${id}/resolve`);
+    loadAlerts();
+  }
+
   const openAlerts = alerts.filter((a) => a.status === "pending");
+  // Acknowledging means "I am going", not "this is dealt with". Without a
+  // closing step the alert stays acknowledged forever, so nothing can measure
+  // how long a table actually waited and nobody can see what is still in hand.
+  const inProgress = alerts.filter(
+    (a) => a.status === "acknowledged" && a.acknowledged_by === user?.id,
+  );
   const activeOrders = orders.filter(
     (o) => !["paid", "cancelled"].includes(o.status)
   );
@@ -292,6 +304,44 @@ function StaffContent() {
               </span>
             </span>
           </button>
+        )}
+
+        {inProgress.length > 0 && (
+          <div className="mb-5">
+            <p
+              className="text-xs font-semibold uppercase tracking-widest mb-2"
+              style={{ color: "var(--muted)" }}
+            >
+              You are handling
+            </p>
+            <div className="space-y-2">
+              {inProgress.map((a) => (
+                <div
+                  key={a.id}
+                  className="flex items-center gap-3 rounded-xl px-4 py-3"
+                  style={{
+                    background: "rgba(0,212,180,0.07)",
+                    border: "1px solid rgba(0,212,180,0.25)",
+                  }}
+                >
+                  <span className="flex-1 text-sm" style={{ color: "var(--text-soft)" }}>
+                    {a.type.replace(/_/g, " ")} · {timeAgo(a.created_at)}
+                  </span>
+                  <button
+                    onClick={() => resolveAlert(a.id)}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg"
+                    style={{
+                      background: "rgba(0,212,180,0.16)",
+                      color: "var(--teal)",
+                      border: "1px solid rgba(0,212,180,0.4)",
+                    }}
+                  >
+                    Done
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* ── Alerts ── */}

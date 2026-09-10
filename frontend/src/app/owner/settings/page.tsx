@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
-import { Eye, EyeOff, KeyRound } from "lucide-react";
+import { Eye, EyeOff, KeyRound, MessageCircle } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface Venue {
@@ -24,6 +24,10 @@ const PLAN_FEATURES: Record<string, string[]> = {
 };
 
 export default function SettingsPage() {
+  const [recoveryPhone, setRecoveryPhone] = useState("");
+  const [savingPhone, setSavingPhone] = useState(false);
+  const [phoneSaved, setPhoneSaved] = useState(false);
+
   const [venue, setVenue] = useState<Venue | null>(null);
   const [exitMinutes, setExitMinutes] = useState(7);
   const [serviceChargePct, setServiceChargePct] = useState(0);
@@ -35,6 +39,34 @@ export default function SettingsPage() {
   const [pwForm, setPwForm] = useState({ current: "", next: "", confirm: "" });
   const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false });
   const [pwSaving, setPwSaving] = useState(false);
+
+  useEffect(() => {
+    api
+      .get("/auth/me")
+      .then((r) => {
+        if (r.data?.phone) {
+          setRecoveryPhone(r.data.phone);
+          setPhoneSaved(true);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  async function saveRecoveryPhone() {
+    setSavingPhone(true);
+    try {
+      await api.post("/auth/recovery-phone", { phone: recoveryPhone });
+      setPhoneSaved(true);
+      toast.success("Recovery number saved");
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "Could not save that number";
+      toast.error(msg);
+    } finally {
+      setSavingPhone(false);
+    }
+  }
 
   useEffect(() => {
     api.get("/venues/me").then((r) => {
@@ -173,6 +205,51 @@ export default function SettingsPage() {
               <div className="h-4 bg-bg-hover rounded w-1/3" />
             </div>
           )}
+        </div>
+
+        {/* Password recovery — without a number saved here the WhatsApp reset
+            path has nothing to match on and cannot be used at all. */}
+        <div className="card space-y-4">
+          <div className="flex items-center gap-2">
+            <MessageCircle size={18} style={{ color: "var(--teal)" }} />
+            <h2 className="font-display text-lg font-semibold text-text">
+              Password Recovery
+            </h2>
+          </div>
+          <p className="text-sm" style={{ color: "var(--text-soft)" }}>
+            Save a WhatsApp number and you can reset your password with a
+            6-digit code if you ever forget it. Without one, email is the only
+            way back into this account.
+          </p>
+          <div className="flex flex-wrap gap-2 items-end">
+            <div className="flex-1 min-w-[180px]">
+              <label className="block text-text-soft text-sm mb-1.5">
+                WhatsApp number
+              </label>
+              <input
+                className="input"
+                type="tel"
+                inputMode="tel"
+                placeholder="08012345678"
+                value={recoveryPhone}
+                onChange={(e) => {
+                  setRecoveryPhone(e.target.value);
+                  setPhoneSaved(false);
+                }}
+                autoComplete="tel"
+              />
+            </div>
+            <button
+              onClick={saveRecoveryPhone}
+              disabled={savingPhone || !recoveryPhone.trim()}
+              className="btn-teal px-5"
+            >
+              {savingPhone ? "Saving…" : phoneSaved ? "Saved" : "Save number"}
+            </button>
+          </div>
+          <p className="text-xs" style={{ color: "var(--muted)" }}>
+            08012345678, 0801 234 5678 and +234 801 234 5678 all work.
+          </p>
         </div>
 
         {/* Change Password */}

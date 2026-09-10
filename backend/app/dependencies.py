@@ -39,9 +39,29 @@ def require_roles(*roles: str):
     return _check
 
 
-def require_plan(*plans: str):
-    async def _check(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)) -> User:
+def require_plan(*plans: str, roles: tuple[str, ...] = ("owner",)):
+    """Gate on the venue's plan AND the user's role.
+
+    A plan is a billing question, not an authorisation one. Used alone this
+    checked only what the venue pays for, so on a Growth plan any signed-in
+    user — a bartender on a shared floor PIN, the door staff — could read owner
+    analytics including every colleague's performance score.
+
+    Roles default to owner because everything currently behind a plan gate is
+    owner-facing. Pass `roles=` to widen it deliberately.
+    """
+    async def _check(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> User:
         from app.models.venue import Venue
+
+        if current_user.role not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+            )
+
         result = await db.execute(select(Venue).where(Venue.id == current_user.venue_id))
         venue = result.scalar_one_or_none()
         if not venue or venue.plan not in plans:
