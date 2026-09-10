@@ -9,7 +9,8 @@ Creates:
   - 3 table zones (VIP, Main Floor, Terrace)
   - Full menu (drinks + food across 4 categories)
   - 3 promos
-  - 8 orders spread across today (some paid, some active)
+  - A Saturday night mid-service: settled tables, tables awaiting payment,
+    orders being prepared, and a couple just placed
   - Exit passes for paid orders
 
 Staff PINs:
@@ -101,8 +102,8 @@ TABLES = [
     ("Table 2", "Main Floor", 4),
     ("Table 3", "Main Floor", 4),
     ("Table 4", "Main Floor", 4),
-    ("T1",      "Terrace",    4),
-    ("T2",      "Terrace",    4),
+    ("Terrace 1", "Terrace",  4),
+    ("Terrace 2", "Terrace",  4),
     ("Bar",     "Bar",        2),
 ]
 
@@ -299,7 +300,7 @@ async def seed():
         # ── Orders ───────────────────────────────────────────────────────────
         now = datetime.now(timezone.utc)
 
-        def make_order(table_label, items_spec, status, paid=False, hours_ago=0):
+        def make_order(table_label, items_spec, status):
             """items_spec: [(item_name, qty)]"""
             oid = nid()
             session = nid()
@@ -315,9 +316,8 @@ async def seed():
                 order_source="qr_scan",
                 total_amount=total,
             )
-            # backdate created_at
-            order.created_at = now - timedelta(hours=hours_ago, minutes=15)
-            order.updated_at = now - timedelta(minutes=5)
+            # Caller sets created_at; the spread across the evening is the
+            # whole point of the seed.
             return oid, session, total, order
 
         def make_items(order_id, items_spec, item_status="ready"):
@@ -338,62 +338,63 @@ async def seed():
                 ))
             return ois
 
+        # ── A Saturday night, mid-service ────────────────────────────────────
+        # The demo reseeds hourly, so timings are relative to now. Every order is
+        # kept inside the current business day (which rolls at 6AM, not midnight)
+        # so tonight's revenue always adds up — otherwise a visitor at 7AM would
+        # see a venue with orders and zero takings.
+        #
+        # The spread is the point: an owner opening this should see a room in
+        # motion — tables settled and gone, tables eating, tables that just
+        # ordered — not six rows all stamped the same minute.
+        from app.utils.venue_time import business_day_start
+
+        day_start = business_day_start()
+        earliest = max(day_start + timedelta(minutes=5), now - timedelta(hours=5))
+        span = (now - timedelta(minutes=2)) - earliest
+
+        def at(fraction: float) -> datetime:
+            """A point through the evening, 0.0 earliest to 1.0 most recent."""
+            return earliest + span * fraction
+
+        # (table, when, items, item_status, order_status)
+        # Beer runs through most tickets because that is what a lounge sells;
+        # the bottle-service tables are the exception, not the norm.
+        NIGHT = [
+            # settled and gone
+            ("Table 1",   0.00, [("Star Lager", 4), ("Beef Suya Skewers", 2)],                    "delivered", "paid"),
+            ("Terrace 1", 0.10, [("Gulder", 6), ("Peppersoup (Goatmeat)", 2)],                    "delivered", "paid"),
+            ("VIP 1",     0.18, [("Moët & Chandon", 1), ("Grilled Tiger Prawns", 2)],             "delivered", "paid"),
+            ("Table 2",   0.30, [("Trophy", 5), ("Truffle Fries", 2), ("Mojito", 2)],             "delivered", "paid"),
+            ("Bar",       0.38, [("Heineken", 3), ("Crispy Calamari", 1)],                        "delivered", "paid"),
+
+            # served, still owing — the cashier's queue
+            ("VIP 2",     0.52, [("Ace of Spades (Gold)", 1), ("Don Julio Tequila", 2)],          "delivered", "fully_served"),
+            ("Table 3",   0.60, [("Legend Extra Stout", 4), ("Lobster Sliders", 2)],              "delivered", "fully_served"),
+            ("Terrace 2", 0.66, [("Star Lager", 6), ("Grilled Tiger Prawns", 1)],                 "delivered", "fully_served"),
+
+            # mid-service
+            ("VIP 3",     0.74, [("Dom Pérignon", 1), ("Hennessy XO", 1), ("Crispy Calamari", 2)], "ready",     "partially_served"),
+            ("Table 4",   0.82, [("Guinness Foreign Extra", 4), ("Peppersoup (Goatmeat)", 2)],     "preparing", "open"),
+            ("Table 1",   0.90, [("Smirnoff Ice", 4), ("Truffle Fries", 1)],                      "preparing", "open"),
+
+            # just landed — these are what the bar and kitchen screens show
+            ("Terrace 1", 0.96, [("Orijin Bitters", 3), ("Beef Suya Skewers", 1)],                "pending",   "open"),
+            ("Table 2",   1.00, [("Gulder", 2), ("Margarita", 2)],                                "pending",   "open"),
+        ]
+
         paid_orders = []
-
-        # 1. VIP 1 — paid, 2 hours ago
-        oid, sess, total, order = make_order("VIP 1",
-            [("Moët & Chandon", 1), ("Grilled Tiger Prawns", 2), ("Truffle Fries", 1)],
-            "paid", hours_ago=2)
-        db.add(order)
-        for oi in make_items(oid, [("Moët & Chandon", 1), ("Grilled Tiger Prawns", 2), ("Truffle Fries", 1)], "delivered"):
-            db.add(oi)
-        paid_orders.append((oid, venue_id, total, sess))
-
-        # 2. Table 1 — paid, 1.5 hours ago
-        oid2, sess2, total2, order2 = make_order("Table 1",
-            [("Hennessy VS", 2), ("Mojito", 2), ("Beef Suya Skewers", 1)],
-            "paid", hours_ago=1)
-        db.add(order2)
-        for oi in make_items(oid2, [("Hennessy VS", 2), ("Mojito", 2), ("Beef Suya Skewers", 1)], "delivered"):
-            db.add(oi)
-        paid_orders.append((oid2, venue_id, total2, sess2))
-
-        # 3. Table 2 — paid, 45 min ago
-        oid3, sess3, total3, order3 = make_order("Table 2",
-            [("Ciroc Vodka", 1), ("Passion Fruit Daiquiri", 3), ("Lobster Sliders", 2)],
-            "paid", hours_ago=0)
-        order3.created_at = now - timedelta(minutes=50)
-        db.add(order3)
-        for oi in make_items(oid3, [("Ciroc Vodka", 1), ("Passion Fruit Daiquiri", 3), ("Lobster Sliders", 2)], "delivered"):
-            db.add(oi)
-        paid_orders.append((oid3, venue_id, total3, sess3))
-
-        # 4. VIP 2 — active, items ready (waiting to pay)
-        oid4, sess4, total4, order4 = make_order("VIP 2",
-            [("Don Julio Tequila", 2), ("Ace of Spades (Gold)", 1), ("Crispy Calamari", 2)],
-            "fully_served", hours_ago=0)
-        order4.created_at = now - timedelta(minutes=35)
-        db.add(order4)
-        for oi in make_items(oid4, [("Don Julio Tequila", 2), ("Ace of Spades (Gold)", 1), ("Crispy Calamari", 2)], "ready"):
-            db.add(oi)
-
-        # 5. Table 3 — active, items pending (just ordered)
-        oid5, sess5, total5, order5 = make_order("Table 3",
-            [("Hennessy XO", 1), ("Grilled Tiger Prawns", 1), ("Truffle Fries", 2)],
-            "open", hours_ago=0)
-        order5.created_at = now - timedelta(minutes=8)
-        db.add(order5)
-        for oi in make_items(oid5, [("Hennessy XO", 1), ("Grilled Tiger Prawns", 1), ("Truffle Fries", 2)], "pending"):
-            db.add(oi)
-
-        # 6. T1 — active, partially served
-        oid6, sess6, total6, order6 = make_order("T1",
-            [("Margarita", 2), ("Peppersoup (Goatmeat)", 1)],
-            "partially_served", hours_ago=0)
-        order6.created_at = now - timedelta(minutes=22)
-        db.add(order6)
-        for oi in make_items(oid6, [("Margarita", 2), ("Peppersoup (Goatmeat)", 1)], "preparing"):
-            db.add(oi)
+        order_times: dict[str, datetime] = {}
+        for table_label, when, spec, item_status, order_status in NIGHT:
+            oid, sess, total, order = make_order(table_label, spec, order_status)
+            order.created_at = at(when)
+            order.updated_at = at(min(1.0, when + 0.02))
+            order_times[oid] = order.created_at
+            db.add(order)
+            for oi in make_items(oid, spec, item_status):
+                db.add(oi)
+            if order_status == "paid":
+                paid_orders.append((oid, venue_id, total, sess))
 
         await db.flush()
 
@@ -401,15 +402,25 @@ async def seed():
         # A realistic mix, so the shift report demonstrates what it is for: a
         # webhook-confirmed transfer, cash counted by hand, and one transfer the
         # cashier simply asserted — the row an owner is meant to reconcile.
+        # provider_ref is unique, so references are generated per order rather
+        # than shared across the mix — five paid tables cycling three payment
+        # types would otherwise collide on the second lap.
         PAYMENT_MIX = [
-            ("transfer", "gateway", "paystack", "es_demo_7f21c9a4"),
-            ("cash",     "cash",    None,       None),
-            ("transfer", "manual",  None,       "GTB/TRF/4471902"),
+            ("transfer", "gateway"),
+            ("cash",     "cash"),
+            ("transfer", "manual"),
         ]
         for idx, (order_id, v_id, amount, session) in enumerate(paid_orders):
-            method, verification, provider, reference = PAYMENT_MIX[idx % len(PAYMENT_MIX)]
+            method, verification = PAYMENT_MIX[idx % len(PAYMENT_MIX)]
+            provider = "paystack" if verification == "gateway" else None
+            reference = (
+                f"es_demo_{idx}{nid()[:8]}" if verification == "gateway"
+                else f"GTB/TRF/{4471900 + idx * 137}" if verification == "manual"
+                else None
+            )
             pay_id = nid()
-            db.add(Payment(
+            paid_at = order_times.get(order_id, now)
+            payment = Payment(
                 id=pay_id,
                 order_id=order_id,
                 venue_id=v_id,
@@ -420,7 +431,10 @@ async def seed():
                 provider_ref=reference if provider else None,
                 transfer_reference=reference if verification == "manual" else None,
                 recorded_by=None if verification == "gateway" else staff_ids.get("cashier"),
-            ))
+            )
+            # A payment lands minutes after the table finished, not at reset time.
+            payment.created_at = paid_at + timedelta(minutes=6)
+            db.add(payment)
             ep_token = generate_exit_pass_token(order_id, v_id)
             db.add(ExitPass(
                 id=nid(),
@@ -452,9 +466,10 @@ async def seed():
         print("  Olu    (Security)   → PIN 5555")
         print()
         print("LIVE DATA")
-        print("  3 paid orders with exit passes")
-        print("  3 active orders (kitchen/bar display shows pending items)")
-        print("  Tonight revenue: see /owner/tonight")
+        print(f"  {len(NIGHT)} orders across the evening, {len(paid_orders)} settled")
+        print("  3 tables served and awaiting payment (cashier queue)")
+        print("  2 orders just placed (bar & kitchen screens)")
+        print("  1 transfer flagged for the owner to reconcile")
         print("=" * 50)
 
 
