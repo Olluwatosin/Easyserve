@@ -247,3 +247,79 @@ h1, h2, h3, h4, h5, h6 {
 .corner-tr { position: absolute; top: 0; right: 0; width: 28px; height: 28px; border-top: 3px solid #00D4B4; border-right: 3px solid #00D4B4; border-radius: 0 3px 0 0; }
 .corner-bl { position: absolute; bottom: 0; left: 0; width: 28px; height: 28px; border-bottom: 3px solid #00D4B4; border-left: 3px solid #00D4B4; border-radius: 0 0 0 3px; }
 .corner-br { position: absolute; bottom: 0; right: 0; width: 28px; height: 28px; border-bottom: 3px solid #00D4B4; border-right: 3px solid #00D4B4; border-radius: 0 0 3px 0; }
+
+
+/* ── Ambient nightlife backdrop ───────────────────────────────────────────────
+ *
+ * The auth screens and every staff display already sit on layered gradients;
+ * the owner portal was the one flat surface in the app. This is the same visual
+ * language — a teal wash from the top left, amber warmth from the bottom right,
+ * and a vignette that settles the edges — pulled into one reusable layer.
+ *
+ * Kept deliberately faint. These screens are read for hours during service, and
+ * a backdrop that competes with the numbers on it is a backdrop that makes the
+ * product worse. It sits behind content, never intercepts a click, and holds
+ * still while the page scrolls so long tables do not drag the light with them.
+ */
+.ambient-night {
+  position: relative;
+  isolation: isolate;
+}
+
+.ambient-night::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(
+      ellipse 90% 60% at 12% 0%,
+      rgba(0, 212, 180, 0.13) 0%,
+      transparent 62%
+    ),
+    radial-gradient(
+      ellipse 70% 50% at 88% 100%,
+      rgba(255, 149, 0, 0.075) 0%,
+      transparent 58%
+    ),
+    radial-gradient(
+      ellipse 60% 45% at 78% 18%,
+      rgba(94, 129, 244, 0.05) 0%,
+      transparent 60%
+    ),
+    linear-gradient(168deg, #0E1B26 0%, #080D14 58%, #060A10 100%);
+}
+
+/* A slow drift, so the room feels alive rather than printed. Far too subtle to
+ * notice directly, and switched off for anyone who asked for less motion. */
+.ambient-night::after {
+  content: "";
+  position: fixed;
+  inset: -20%;
+  z-index: -1;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 40% 30% at 50% 50%,
+    rgba(0, 212, 180, 0.055) 0%,
+    transparent 70%
+  );
+  animation: ambient-drift 28s ease-in-out infinite alternate;
+}
+
+@keyframes ambient-drift {
+  from { transform: translate3d(-6%, -3%, 0) scale(1); }
+  to   { transform: translate3d(6%, 4%, 0) scale(1.12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ambient-night::after { animation: none; }
+}
+
+/* Cards need a touch of translucency for the backdrop to read through them,
+ * otherwise the glow stops dead at every panel edge. */
+.ambient-night .card,
+.ambient-night .card-sm {
+  background-color: rgba(15, 25, 35, 0.72);
+  backdrop-filter: blur(10px);
+}

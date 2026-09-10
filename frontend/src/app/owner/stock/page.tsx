@@ -200,7 +200,7 @@ export default function StockPage() {
         <div
           className="rounded-2xl p-5 space-y-4"
           style={{
-            background: "#111827",
+            background: "rgba(17,24,39,0.66)", backdropFilter: "blur(10px)",
             border: `1px solid ${
               result.shrinkage_value > 0 ? "rgba(248,113,113,0.3)" : "rgba(0,212,180,0.3)"
             }`,
@@ -273,7 +273,7 @@ export default function StockPage() {
       {/* ── The list ────────────────────────────────────────────────────── */}
       <div
         className="rounded-2xl overflow-hidden"
-        style={{ background: "#111827", border: "1px solid #1E2D42" }}
+        style={{ background: "rgba(17,24,39,0.66)", backdropFilter: "blur(10px)", border: "1px solid #1E2D42" }}
       >
         {items.map((item, i) => (
           <div

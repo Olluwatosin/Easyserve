@@ -66,11 +66,15 @@ function OwnerShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen bg-bg overflow-hidden">
+    <div className="flex h-screen bg-bg overflow-hidden ambient-night">
       {/* ── Sidebar ── */}
       <aside
         className="w-[220px] flex-shrink-0 flex flex-col border-r border-border"
-        style={{ background: "linear-gradient(180deg, #0E1820 0%, #080D14 100%)" }}
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(14,24,32,0.82) 0%, rgba(8,13,20,0.88) 100%)",
+          backdropFilter: "blur(14px)",
+        }}
       >
         {/* Logo */}
         <div className="px-4 pt-5 pb-4">
@@ -164,7 +168,7 @@ function OwnerShell({ children }: { children: React.ReactNode }) {
         {/* Top header */}
         <header
           className="flex-shrink-0 border-b border-border px-7 py-3 flex items-center justify-between"
-          style={{ background: "rgba(8,13,20,0.85)", backdropFilter: "blur(12px)" }}
+          style={{ background: "rgba(8,13,20,0.55)", backdropFilter: "blur(14px)" }}
         >
           <div className="flex items-center gap-3">
             <p className="font-display font-semibold text-sm" style={{ color: "var(--text)" }}>

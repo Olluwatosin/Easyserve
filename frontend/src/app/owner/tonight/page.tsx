@@ -135,7 +135,7 @@ export default function TonightPage() {
           <div
             key={label}
             className="rounded-2xl p-4"
-            style={{ background: "#111827", border: "1px solid #1E2D42" }}
+            style={{ background: "rgba(17,24,39,0.66)", backdropFilter: "blur(10px)", border: "1px solid #1E2D42" }}
           >
             <div
               className="w-8 h-8 rounded-xl flex items-center justify-center mb-3"
@@ -161,7 +161,7 @@ export default function TonightPage() {
         {data.top_items.length === 0 ? (
           <div
             className="rounded-2xl p-6 text-center"
-            style={{ background: "#111827", border: "1px solid #1E2D42" }}
+            style={{ background: "rgba(17,24,39,0.66)", backdropFilter: "blur(10px)", border: "1px solid #1E2D42" }}
           >
             <p className="text-sm" style={{ color: "var(--muted)" }}>
               No orders yet today
@@ -170,7 +170,7 @@ export default function TonightPage() {
         ) : (
           <div
             className="rounded-2xl overflow-hidden"
-            style={{ background: "#111827", border: "1px solid #1E2D42" }}
+            style={{ background: "rgba(17,24,39,0.66)", backdropFilter: "blur(10px)", border: "1px solid #1E2D42" }}
           >
             {data.top_items.map((item, i) => {
               const Icon = ITEM_ICON[item.item_type] ?? UtensilsCrossed;
@@ -235,7 +235,7 @@ export default function TonightPage() {
           {shift.cashiers.length === 0 ? (
             <div
               className="rounded-2xl p-6 text-center"
-              style={{ background: "#111827", border: "1px solid #1E2D42" }}
+              style={{ background: "rgba(17,24,39,0.66)", backdropFilter: "blur(10px)", border: "1px solid #1E2D42" }}
             >
               <p className="text-sm" style={{ color: "var(--muted)" }}>
                 No payments recorded yet tonight
@@ -244,7 +244,7 @@ export default function TonightPage() {
           ) : (
             <div
               className="rounded-2xl overflow-hidden"
-              style={{ background: "#111827", border: "1px solid #1E2D42" }}
+              style={{ background: "rgba(17,24,39,0.66)", backdropFilter: "blur(10px)", border: "1px solid #1E2D42" }}
             >
               {shift.cashiers.map((c, i) => (
                 <div
@@ -298,7 +298,7 @@ export default function TonightPage() {
           </p>
           <div
             className="rounded-2xl overflow-hidden"
-            style={{ background: "#111827", border: "1px solid rgba(255,149,0,0.28)" }}
+            style={{ background: "rgba(17,24,39,0.66)", backdropFilter: "blur(10px)", border: "1px solid rgba(255,149,0,0.28)" }}
           >
             {shift.unverified_transfers.map((t, i) => (
               <div
@@ -341,7 +341,7 @@ export default function TonightPage() {
           </div>
           <div
             className="rounded-2xl overflow-hidden"
-            style={{ background: "#111827", border: "1px solid rgba(248,113,113,0.2)" }}
+            style={{ background: "rgba(17,24,39,0.66)", backdropFilter: "blur(10px)", border: "1px solid rgba(248,113,113,0.2)" }}
           >
             {shift.voids.map((v, i) => (
               <div
