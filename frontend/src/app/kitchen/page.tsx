@@ -6,6 +6,8 @@ import { ConnectionBanner, useReconnectingWS } from "@/lib/ws";
 import { useAuthStore } from "@/stores/auth";
 import AuthGuard from "@/components/AuthGuard";
 import toast from "react-hot-toast";
+
+import { OfflineBanner, useOffline } from "@/lib/useOffline";
 import { CheckCircle, ChefHat, Clock } from "lucide-react";
 import { WS_URL } from "@/lib/env";
 
@@ -78,6 +80,7 @@ const URGENCY_TOP: Record<string, string> = {
 };
 
 function KitchenContent() {
+  const offline = useOffline();
   const { user } = useAuthStore();
   const [orders, setOrders] = useState<DisplayOrder[]>([]);
   function loadOrders() {
@@ -105,19 +108,37 @@ function KitchenContent() {
   );
 
   async function markPreparing(itemId: string) {
-    await api.patch(`/orders/items/${itemId}/status`, { status: "preparing" });
+    await offline.submit({
+      method: "PATCH",
+      url: `/orders/items/${itemId}/status`,
+      kind: "status",
+      label: `Mark preparing`,
+      body: { status: "preparing" },
+    });
     loadOrders();
     toast("Accepted — cooking started", { icon: "🔥" });
   }
 
   async function markReady(itemId: string) {
-    await api.patch(`/orders/items/${itemId}/status`, { status: "ready" });
+    await offline.submit({
+      method: "PATCH",
+      url: `/orders/items/${itemId}/status`,
+      kind: "status",
+      label: `Mark ready`,
+      body: { status: "ready" },
+    });
     loadOrders();
     toast.success("Marked ready — attendant notified");
   }
 
   async function markDelivered(itemId: string) {
-    await api.patch(`/orders/items/${itemId}/status`, { status: "delivered" });
+    await offline.submit({
+      method: "PATCH",
+      url: `/orders/items/${itemId}/status`,
+      kind: "status",
+      label: `Mark delivered`,
+      body: { status: "delivered" },
+    });
     loadOrders();
   }
 
@@ -132,6 +153,7 @@ function KitchenContent() {
 
   return (
     <div className="min-h-screen bg-bg">
+      <OfflineBanner state={offline} />
       <ConnectionBanner status={wsStatus} />
       {/* Header */}
       <header

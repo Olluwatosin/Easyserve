@@ -164,3 +164,75 @@ async def test_email_token_cannot_be_redeemed_as_a_phone_code(client, caplog_cod
         "token": links[-1], "new_password": "Crossed12345!", "phone": phone,
     })
     assert r.status_code == 400
+
+
+# ── Offline order replay ─────────────────────────────────────────────────────
+
+async def test_replayed_offline_order_does_not_charge_twice(client):
+    """A phone that queued an order offline may replay it several times before
+    it hears back. Every replay carries the same client_request_id, and the
+    server must return the first order rather than create a second one the
+    guest gets charged for."""
+    from sqlalchemy import func, select
+    from app.database import AsyncSessionLocal
+    from app.models.order import Order
+
+    email = f"{uuid.uuid4().hex[:10]}@test.ng"
+    r = await client.post("/api/v1/auth/register", json={
+        "venue_name": f"Venue {uuid.uuid4().hex[:6]}", "full_name": "Owner",
+        "email": email, "password": "OriginalPass1!",
+    })
+    headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+
+    table = (await client.post("/api/v1/tables", json={"label": "T1", "zone": None},
+                               headers=headers)).json()
+    cat = (await client.post("/api/v1/menu/categories", json={"name": "Drinks", "sort_order": 1},
+                             headers=headers)).json()
+    item = (await client.post("/api/v1/menu/items", json={
+        "category_id": cat["id"], "name": "Star Lager", "price": 1500, "item_type": "drink",
+    }, headers=headers)).json()
+
+    key = str(uuid.uuid4())
+    payload = {
+        "client_request_id": key,
+        "items": [{"menu_item_id": item["id"], "quantity": 2}],
+        "order_source": "qr_scan",
+    }
+
+    first = await client.post(f"/api/v1/customer/orders/{table['qr_token']}", json=payload)
+    assert first.status_code == 200, first.text
+
+    # Three more replays, exactly as a flaky connection would produce.
+    for _ in range(3):
+        again = await client.post(f"/api/v1/customer/orders/{table['qr_token']}", json=payload)
+        assert again.status_code == 200
+        assert again.json()["id"] == first.json()["id"]
+        assert again.json()["total_amount"] == first.json()["total_amount"]
+
+    async with AsyncSessionLocal() as db:
+        count = (await db.execute(
+            select(func.count(Order.id)).where(Order.client_request_id == key)
+        )).scalar()
+    assert count == 1, f"replay created {count} orders"
+
+
+async def test_orders_without_a_key_are_still_independent(client):
+    """Only replays collapse. Two genuine orders must stay two orders."""
+    email = f"{uuid.uuid4().hex[:10]}@test.ng"
+    r = await client.post("/api/v1/auth/register", json={
+        "venue_name": f"Venue {uuid.uuid4().hex[:6]}", "full_name": "Owner",
+        "email": email, "password": "OriginalPass1!",
+    })
+    headers = {"Authorization": f"Bearer {r.json()['access_token']}"}
+    table = (await client.post("/api/v1/tables", json={"label": "T2", "zone": None},
+                               headers=headers)).json()
+    cat = (await client.post("/api/v1/menu/categories", json={"name": "Beer", "sort_order": 1},
+                             headers=headers)).json()
+    item = (await client.post("/api/v1/menu/items", json={
+        "category_id": cat["id"], "name": "Gulder", "price": 1400, "item_type": "drink",
+    }, headers=headers)).json()
+
+    body = {"items": [{"menu_item_id": item["id"], "quantity": 1}], "order_source": "qr_scan"}
+    a = await client.post(f"/api/v1/customer/orders/{table['qr_token']}", json=body)
+    b = await client.post(f"/api/v1/customer/orders/{table['qr_token']}", json=body)
+    assert a.json()["id"] != b.json()["id"]

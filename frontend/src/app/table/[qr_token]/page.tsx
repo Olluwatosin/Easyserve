@@ -7,6 +7,9 @@ import { useOrderStore } from "@/stores/order";
 import { formatNGN } from "@/lib/utils";
 import { Plus, Minus, Bell, X, Tag, ChevronRight, Check } from "lucide-react";
 import toast from "react-hot-toast";
+
+import { newRequestId } from "@/lib/offline";
+import { OfflineBanner, useOffline } from "@/lib/useOffline";
 import { useRouter } from "next/navigation";
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
@@ -215,6 +218,7 @@ export default function CustomerMenuPage({
   const [cartOpen, setCartOpen] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
   const [placing, setPlacing] = useState(false);
+  const offline = useOffline();
   const [orderSent, setOrderSent] = useState(false);
   const [guestPhone, setGuestPhone] = useState("");
 
@@ -246,22 +250,39 @@ export default function CustomerMenuPage({
     setPlacing(true);
     try {
       if (guestPhone) localStorage.setItem("guest_phone", guestPhone);
-      await api.post(`/customer/orders/${qr_token}`, {
-        session_token: sessionToken.current,
-        customer_phone: guestPhone || null,
-        items: cart.map((c) => ({
-          menu_item_id: c.menu_item_id,
-          quantity: c.quantity,
-          notes: c.notes,
-        })),
+      // Generated here, before the attempt, so a replay after a dropped
+      // connection is recognised as the same order rather than a second one.
+      const clientRequestId = newRequestId();
+      const { queued, response } = await offline.submit({
+        method: "POST",
+        url: `/customer/orders/${qr_token}`,
+        kind: "order",
+        label: `Order for ${cart.length} item${cart.length === 1 ? "" : "s"}`,
+        body: {
+          client_request_id: clientRequestId,
+          session_token: sessionToken.current,
+          customer_phone: guestPhone || null,
+          items: cart.map((c) => ({
+            menu_item_id: c.menu_item_id,
+            quantity: c.quantity,
+            notes: c.notes,
+          })),
+        },
       });
+
+      if (!queued && response && !response.ok) {
+        const detail = await response.json().catch(() => null);
+        toast.error(detail?.detail ?? "Failed to place order");
+        return;
+      }
+
       clearCart();
       setOrderSent(true);
-    } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail ?? "Failed to place order";
-      toast.error(msg);
+      if (queued) {
+        toast.success("Saved — it will send when the network returns", { duration: 5000 });
+      }
+    } catch {
+      toast.error("Failed to place order");
     } finally {
       setPlacing(false);
     }
@@ -269,7 +290,13 @@ export default function CustomerMenuPage({
 
   async function sendAlert() {
     try {
-      await api.post(`/customer/alerts/${qr_token}`, { type: "call_attendant" });
+      await offline.submit({
+        method: "POST",
+        url: `/customer/alerts/${qr_token}`,
+        kind: "alert",
+        label: "Call attendant",
+        body: { type: "call_attendant" },
+      });
       toast.success("Attendant notified!");
       setAlertOpen(false);
     } catch {
@@ -289,6 +316,7 @@ export default function CustomerMenuPage({
 
   return (
     <div className="min-h-screen pb-28" style={{ background: "var(--bg)" }}>
+      <OfflineBanner state={offline} />
 
       {/* ── Hero header (non-sticky) ── */}
       <div className="relative w-full h-52 overflow-hidden">

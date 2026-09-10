@@ -10,6 +10,9 @@ class OrderItemInput(BaseModel):
 
 
 class PlaceOrderRequest(BaseModel):
+    # Set by the client so a queued order replayed after a network drop is
+    # recognised rather than duplicated.
+    client_request_id: str | None = None
     items: list[OrderItemInput]
     session_token: str | None = None
     order_source: Literal["qr_scan", "whatsapp", "walk_in"] = "qr_scan"

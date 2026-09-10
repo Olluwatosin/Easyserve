@@ -23,6 +23,13 @@ class Order(Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     session_token: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    # Client-generated id for the attempt, not the order. A phone that queued
+    # an order offline may replay it several times before it hears back; every
+    # replay carries the same key so the second one returns the first order
+    # instead of creating a duplicate the guest gets charged for.
+    client_request_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True, index=True
+    )
     status: Mapped[str] = mapped_column(String(20), default="open", nullable=False)
     order_source: Mapped[str] = mapped_column(String(20), default="qr_scan", nullable=False)
     total_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False)

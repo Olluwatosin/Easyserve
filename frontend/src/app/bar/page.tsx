@@ -7,6 +7,8 @@ import { useAuthStore } from "@/stores/auth";
 import AuthGuard from "@/components/AuthGuard";
 import { timeAgo } from "@/lib/utils";
 import toast from "react-hot-toast";
+
+import { OfflineBanner, useOffline } from "@/lib/useOffline";
 import { LogOut } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { WS_URL } from "@/lib/env";
@@ -38,6 +40,7 @@ const STATUS_COLOR: Record<string, string> = {
 
 function BarContent() {
   const { user, logout } = useAuthStore();
+  const offline = useOffline();
   const [orders, setOrders] = useState<DisplayOrder[]>([]);
   const router = useRouter();
 
@@ -66,19 +69,37 @@ function BarContent() {
   );
 
   async function markPreparing(itemId: string) {
-    await api.patch(`/orders/items/${itemId}/status`, { status: "preparing" });
+    await offline.submit({
+      method: "PATCH",
+      url: `/orders/items/${itemId}/status`,
+      kind: "status",
+      label: `Mark preparing`,
+      body: { status: "preparing" },
+    });
     loadOrders();
     toast("Accepted — now preparing", { icon: "🍸" });
   }
 
   async function markReady(itemId: string) {
-    await api.patch(`/orders/items/${itemId}/status`, { status: "ready" });
+    await offline.submit({
+      method: "PATCH",
+      url: `/orders/items/${itemId}/status`,
+      kind: "status",
+      label: `Mark ready`,
+      body: { status: "ready" },
+    });
     loadOrders();
     toast.success("Drink ready — attendant notified!");
   }
 
   async function markDelivered(itemId: string) {
-    await api.patch(`/orders/items/${itemId}/status`, { status: "delivered" });
+    await offline.submit({
+      method: "PATCH",
+      url: `/orders/items/${itemId}/status`,
+      kind: "status",
+      label: `Mark delivered`,
+      body: { status: "delivered" },
+    });
     loadOrders();
   }
 
@@ -88,6 +109,7 @@ function BarContent() {
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
+      <OfflineBanner state={offline} />
       <ConnectionBanner status={wsStatus} />
 
       {/* ── Header ── */}

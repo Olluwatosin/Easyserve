@@ -28,6 +28,18 @@ def apply_bill_charges(order: Order, venue: Venue) -> None:
 
 
 async def place_order(db: AsyncSession, qr_token: str, req: PlaceOrderRequest) -> Order:
+    # A replayed offline order arrives with the key it was queued under. Return
+    # what that key already produced rather than charging the guest twice.
+    if req.client_request_id:
+        seen = await db.execute(
+            select(Order)
+            .where(Order.client_request_id == req.client_request_id)
+            .options(selectinload(Order.items))
+        )
+        existing = seen.scalar_one_or_none()
+        if existing is not None:
+            return existing
+
     # Resolve table
     result = await db.execute(
         select(Table).where(Table.qr_token == qr_token, Table.is_active == True)
@@ -100,6 +112,8 @@ async def place_order(db: AsyncSession, qr_token: str, req: PlaceOrderRequest) -
         for oi in order_items:
             oi.order_id = existing_order.id
             db.add(oi)
+        if req.client_request_id and not existing_order.client_request_id:
+            existing_order.client_request_id = req.client_request_id
         existing_order.total_amount = round(float(existing_order.total_amount) + total, 2)
         apply_bill_charges(existing_order, venue)
         if req.customer_phone and not existing_order.customer_phone:
@@ -119,6 +133,7 @@ async def place_order(db: AsyncSession, qr_token: str, req: PlaceOrderRequest) -
             assigned_to=table.assigned_attendant_id,
             session_token=session_token,
             order_source=req.order_source,
+            client_request_id=req.client_request_id,
             total_amount=round(total, 2),
             customer_phone=req.customer_phone,
         )
