@@ -94,7 +94,10 @@ function CashierContent() {
         msg.event === "new_order_attendant" ||
         msg.event === "bar_order_ready" ||
         msg.event === "kitchen_order_ready" ||
-        msg.event === "payment_recorded"
+        msg.event === "payment_recorded" ||
+        // Moves a table from "still being served" into "ready to pay" the
+        // moment the last item is handed over.
+        msg.event === "order_item_update"
       ) {
         loadOrders();
       }

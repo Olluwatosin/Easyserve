@@ -61,6 +61,15 @@ function BarContent() {
       ? `${WS_URL}/ws/bar/${user.venue_id}?token=${token}`
       : null,
     (msg) => {
+      // A change made on another device — a second bartender accepting, an
+      // attendant marking delivered — must show here too. Filtered by type so
+      // the bar does not reload for kitchen traffic.
+      if (
+        msg.event === "order_item_update" &&
+        msg.data?.item_type === "drink"
+      ) {
+        loadOrders();
+      }
       if (msg.event === "new_order_bar") {
         loadOrders();
         toast("New drink order!", { icon: "🍹" });

@@ -103,6 +103,12 @@ function StaffContent() {
       ? `${WS_URL}/ws/${user.venue_id}?token=${token}`
       : null,
     (msg) => {
+      // Every transition a station makes — accepted, ready, served, voided.
+      // Without this the floor sees whatever was true when the page loaded,
+      // which is the one thing a live board must never do.
+      if (msg.event === "order_item_update") {
+        loadOrders();
+      }
       if (msg.event === "new_order_attendant") {
         loadOrders();
         toast("New order arrived", { icon: "🛎️" });
