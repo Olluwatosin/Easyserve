@@ -25,6 +25,15 @@ class OrderItem(Base):
     item_type: Mapped[str] = mapped_column(String(20), nullable=False, default="other")
     routed_to: Mapped[str] = mapped_column(String(20), nullable=False, default="none")
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
+    # When a station accepted this item. The countdown the guest sees runs
+    # from here, not from when they ordered — a ticket sitting in a queue for
+    # ten minutes should not show as nearly ready.
+    accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    ready_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

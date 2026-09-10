@@ -12,6 +12,8 @@ class VenueResponse(BaseModel):
     plan: str
     is_active: bool
     exit_pass_minutes: int
+    drink_prep_minutes: int = 5
+    food_prep_minutes: int = 15
     attendants_take_payment: bool = False
     service_charge_pct: float
     vat_pct: float
@@ -26,6 +28,8 @@ class VenueUpdate(BaseModel):
     city: str | None = None
     phone: str | None = None
     exit_pass_minutes: int | None = None
+    drink_prep_minutes: int | None = None
+    food_prep_minutes: int | None = None
     attendants_take_payment: bool | None = None
     service_charge_pct: float | None = None
     vat_pct: float | None = None

@@ -94,3 +94,30 @@ def test_order_events_include_the_one_that_was_missed():
     orders_block = src[src.index("orders: ["): src.index("]", src.index("orders: ["))]
     assert "order_item_update" in orders_block
     assert "payment_recorded" in orders_block
+
+
+# ── Guest order tracking ─────────────────────────────────────────────────────
+
+def test_the_guest_channel_carries_item_status():
+    """The tracker is driven by item_status_update on the customer socket. If
+    that stops being sent, the guest's progress silently freezes and the only
+    symptom is a countdown that never moves."""
+    src = (BACKEND / "routers" / "orders.py").read_text()
+    assert '"item_status_update"' in src
+
+
+def test_a_re_tap_cannot_restart_a_timer_the_guest_is_watching():
+    """Stations mis-tap. Stamping accepted_at only on the first transition means
+    a correction does not hand the guest a fresh countdown for food that has
+    been coming for ten minutes."""
+    src = (BACKEND / "routers" / "orders.py").read_text()
+    assert "item.accepted_at is None" in src
+    assert "item.ready_at is None" in src
+
+
+def test_prep_minutes_reach_the_guest_without_a_second_request():
+    """The bill fills prep_minutes per item from venue settings, so the guest
+    page needs no knowledge of how the venue is configured."""
+    src = (BACKEND / "routers" / "customer.py").read_text()
+    assert "prep_minutes" in src
+    assert "drink_prep_minutes" in src and "food_prep_minutes" in src

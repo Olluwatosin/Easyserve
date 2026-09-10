@@ -34,6 +34,12 @@ class Venue(Base):
         Boolean, default=False, nullable=False
     )
     exit_pass_minutes: Mapped[int] = mapped_column(default=10, nullable=False)
+    # What the guest is told to expect once a station accepts their item.
+    # A promise, not a measurement — set them to what the venue can actually
+    # hit on a busy night, because a countdown that expires while someone is
+    # still waiting is worse than no countdown at all.
+    drink_prep_minutes: Mapped[int] = mapped_column(default=5, nullable=False)
+    food_prep_minutes: Mapped[int] = mapped_column(default=15, nullable=False)
     # Bill percentages (10.00 = 10%). Snapshotted onto each order at creation.
     service_charge_pct: Mapped[float] = mapped_column(Numeric(5, 2), default=0, nullable=False)
     vat_pct: Mapped[float] = mapped_column(Numeric(5, 2), default=0, nullable=False)

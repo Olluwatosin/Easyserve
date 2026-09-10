@@ -121,13 +121,32 @@ async def place_customer_order(
 
 @router.get("/orders/{session_token}", response_model=list[OrderResponse])
 async def get_bill(session_token: str, db: AsyncSession = Depends(get_db)):
+    """The guest's own orders, with enough timing to track them.
+
+    prep_minutes is filled in per item from the venue's settings so the guest
+    page needs no second request and no knowledge of how the venue is
+    configured.
+    """
     result = await db.execute(
         select(Order)
         .where(Order.session_token == session_token)
         .options(selectinload(Order.items), selectinload(Order.table))
         .order_by(Order.created_at.asc())
     )
-    return result.scalars().all()
+    orders = list(result.scalars().all())
+    if not orders:
+        return orders
+
+    venue = (
+        await db.execute(select(Venue).where(Venue.id == orders[0].venue_id))
+    ).scalar_one_or_none()
+    drink_mins = venue.drink_prep_minutes if venue else 5
+    food_mins = venue.food_prep_minutes if venue else 15
+
+    for order in orders:
+        for item in order.items:
+            item.prep_minutes = drink_mins if item.item_type == "drink" else food_mins
+    return orders
 
 
 @router.post("/alerts/{qr_token}", response_model=AlertResponse)

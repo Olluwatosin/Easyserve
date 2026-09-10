@@ -31,6 +31,8 @@ export default function SettingsPage() {
 
   const [venue, setVenue] = useState<Venue | null>(null);
   const [exitMinutes, setExitMinutes] = useState(7);
+  const [drinkPrep, setDrinkPrep] = useState(5);
+  const [foodPrep, setFoodPrep] = useState(15);
   const [serviceChargePct, setServiceChargePct] = useState(0);
   const [vatPct, setVatPct] = useState(0);
   const [saving, setSaving] = useState(false);
@@ -89,6 +91,8 @@ export default function SettingsPage() {
       setAttendantsPay(Boolean(r.data?.attendants_take_payment));
       setVenue(r.data);
       setExitMinutes(r.data.exit_pass_minutes);
+      setDrinkPrep(r.data.drink_prep_minutes ?? 5);
+      setFoodPrep(r.data.food_prep_minutes ?? 15);
       setServiceChargePct(Number(r.data.service_charge_pct ?? 0));
       setVatPct(Number(r.data.vat_pct ?? 0));
     }).catch(() => {});
@@ -118,6 +122,8 @@ export default function SettingsPage() {
     try {
       await api.patch("/venues/me", {
         exit_pass_minutes: exitMinutes,
+        drink_prep_minutes: drinkPrep,
+        food_prep_minutes: foodPrep,
         service_charge_pct: serviceChargePct,
         vat_pct: vatPct,
       });
@@ -175,6 +181,41 @@ export default function SettingsPage() {
                     onChange={(e) => setExitMinutes(parseInt(e.target.value))}
                   />
                   <p className="text-muted text-sm">Default: 7 min · Range: 1–60 min</p>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-text-soft text-sm font-medium mb-1.5">
+                  What guests are told to expect
+                </label>
+                <p className="text-muted text-sm mb-2.5">
+                  Once a station accepts an item the guest sees a countdown.
+                  Set these to what you can hit on a busy night — a timer that
+                  runs out while someone is still waiting is worse than none.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-muted text-xs mb-1.5">Drinks (minutes)</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min="1"
+                      max="60"
+                      value={drinkPrep}
+                      onChange={(e) => setDrinkPrep(parseInt(e.target.value) || 1)}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-muted text-xs mb-1.5">Kitchen (minutes)</label>
+                    <input
+                      className="input"
+                      type="number"
+                      min="1"
+                      max="120"
+                      value={foodPrep}
+                      onChange={(e) => setFoodPrep(parseInt(e.target.value) || 1)}
+                    />
+                  </div>
                 </div>
               </div>
 

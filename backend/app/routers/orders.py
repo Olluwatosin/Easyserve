@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -148,6 +150,15 @@ async def update_item_status(
                 await stock_service.restore_for_void(
                     db, menu_item, item.quantity, order.id, current_user.id
                 )
+
+    # Stamp the transitions the guest's countdown is anchored to. Only on the
+    # first move into each state, so a station correcting a mis-tap does not
+    # restart a timer the guest is already watching.
+    _now = datetime.now(timezone.utc)
+    if req.status == "preparing" and item.accepted_at is None:
+        item.accepted_at = _now
+    if req.status == "ready" and item.ready_at is None:
+        item.ready_at = _now
 
     item.status = req.status
 

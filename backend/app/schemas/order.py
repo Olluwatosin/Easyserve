@@ -30,6 +30,11 @@ class OrderItemResponse(BaseModel):
     routed_to: str
     status: str
     notes: str | None
+    accepted_at: datetime | None = None
+    ready_at: datetime | None = None
+    # How long this station said it would take, so the guest's countdown
+    # needs no second request and no knowledge of venue settings.
+    prep_minutes: int | None = None
 
     model_config = {"from_attributes": True}
 

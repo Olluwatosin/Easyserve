@@ -9,6 +9,7 @@ import toast from "react-hot-toast";
 import { EsLogo } from "@/components/EsLogo";
 import { QRCodeSVG } from "qrcode.react";
 import { WS_URL } from "@/lib/env";
+import { OrderTracker } from "@/components/OrderTracker";
 
 const STATUS_COLOR: Record<string, string> = {
   pending: "#FF9500",
@@ -40,6 +41,9 @@ interface OrderData {
     price: number;
     status: string;
     item_type?: string;
+    accepted_at?: string | null;
+    ready_at?: string | null;
+    prep_minutes?: number | null;
   }>;
   created_at: string;
 }
@@ -79,6 +83,11 @@ export default function BillPage({
   useReconnectingWS(
     `${WS_URL}/ws/customer/${session_token}`,
     (msg) => {
+      // The guest's own item transitions — the whole point of the tracker.
+      // Without this the progress would only move on a manual refresh.
+      if (msg.event === "item_status_update") {
+        load();
+      }
       if (
         msg.event === "payment_confirmed" ||
         msg.event === "exit_pass_ready"
@@ -178,6 +187,28 @@ export default function BillPage({
       </div>
 
       <div className="px-4 py-5 space-y-4">
+
+        {/* ── Where's my order ──
+            Shown only while something is still coming. Once everything is
+            served this collapses away rather than lingering as a wall of
+            ticks — the guest's attention should move to the bill. */}
+        {orders.some((o) =>
+          o.items.some((i) => ["pending", "preparing", "ready"].includes(i.status)),
+        ) && (
+          <div className="mb-5">
+            <p
+              className="text-xs font-semibold uppercase tracking-widest mb-2.5"
+              style={{ color: "var(--muted)" }}
+            >
+              Your order
+            </p>
+            <OrderTracker
+              items={orders.flatMap((o) =>
+                o.items.map((i) => ({ ...i, item_type: i.item_type ?? "other" })),
+              )}
+            />
+          </div>
+        )}
 
         {/* ── Order items ── */}
         {orders.map((order) => (
