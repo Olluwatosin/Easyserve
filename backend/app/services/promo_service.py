@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from app.utils.venue_time import business_weekday, in_window, now_local
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -14,16 +14,25 @@ async def get_active_promos(db: AsyncSession, venue_id: str) -> list[Promo]:
 
 
 def apply_promo(item: MenuItem, promos: list[Promo]) -> float:
-    now = datetime.now(timezone.utc)
-    current_time = now.time()
-    day_name = now.strftime("%A").lower()
+    """Best active discount for this item right now, or its normal price.
+
+    Evaluated in venue-local time against the current *business* day, so a
+    Friday 22:00-02:00 happy hour is one Friday promo rather than two windows
+    that each half-fail.
+    """
+    local_now = now_local()
+    current_time = local_now.time()
+    # The night we are in, not the calendar date — at 1AM on Saturday a Friday
+    # promo is still running.
+    day_name = business_weekday(local_now)
 
     best_discount = 0.0
     for promo in promos:
         if not promo.is_active:
             continue
-        # Check time window
-        if not (promo.start_time <= current_time <= promo.end_time):
+        # Handles windows that wrap past midnight, which a plain comparison
+        # silently never matches.
+        if not in_window(current_time, promo.start_time, promo.end_time):
             continue
         # Check day (empty list or None means all days active)
         if promo.days_active and day_name not in [d.lower() for d in promo.days_active]:

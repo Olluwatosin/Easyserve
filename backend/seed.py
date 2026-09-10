@@ -267,19 +267,22 @@ async def seed():
         assert not _typos, f"STOCK_LEVELS names not on the menu: {sorted(_typos)}"
 
         # ── Promos ───────────────────────────────────────────────────────────
-        # Windows deliberately span the whole day. A real venue's happy hour is
-        # something like 18:00–20:00, but the demo has to show promo pricing
-        # whenever a visitor happens to open the link.
-        #
-        # NOTE: apply_promo() compares against UTC and cannot match a window that
-        # crosses midnight (22:00–02:00 is never true), so real nightlife happy
-        # hours don't work yet. Tracked separately — don't copy these times into
-        # a live venue and expect them to behave.
+        # Two of these run all day so a visitor always sees promo pricing
+        # whenever they open the demo link. The third is a genuine nightlife
+        # window that wraps past midnight — the shape that silently never fired
+        # before, kept here so the demo proves it does now.
         ALL_DAY = (time(0, 0), time(23, 59))
         db.add(Promo(
             id=nid(), venue_id=venue_id, name="Ladies' Night — 20% off cocktails",
             discount_pct=20, start_time=ALL_DAY[0], end_time=ALL_DAY[1],
             days_active=[], applies_to=[cat_map["Cocktails & Mixers"]], is_active=True,
+        ))
+        # 10pm till 2am, Fridays and Saturdays — a window that crosses midnight.
+        db.add(Promo(
+            id=nid(), venue_id=venue_id, name="Late Night — 25% off beers",
+            discount_pct=25, start_time=time(22, 0), end_time=time(2, 0),
+            days_active=["friday", "saturday"],
+            applies_to=[cat_map["Beers & Ciders"]], is_active=True,
         ))
         db.add(Promo(
             id=nid(), venue_id=venue_id, name="Kitchen Special — 15% off small plates",

@@ -281,7 +281,8 @@ directory shadows the installed package. Use `uv run alembic`.
 **`uv run pytest` can resolve the wrong pytest.** Use `uv run python -m pytest`,
 which pins it to the project venv.
 
-**Promo time windows can't cross midnight.** `apply_promo` compares against UTC
-with `start_time <= now <= end_time`, so a 22:00–02:00 happy hour — the normal
-shape for nightlife — never matches. Windows are also UTC, not WAT. Both need
-fixing before promos are sold as a feature.
+**Promo windows are evaluated in venue-local time, on the business day.**
+A 22:00–02:00 happy hour wraps past midnight correctly, and at 1AM on Saturday a
+Friday promo is still running — the night rolls over at 6AM, not midnight. Both
+rules live in `app/utils/venue_time.py`; use it rather than `datetime.now()` for
+anything that reasons about when the venue is open.

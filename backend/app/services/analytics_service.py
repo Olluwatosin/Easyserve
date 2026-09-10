@@ -14,25 +14,14 @@ from app.models.table import Table
 from app.models.exit_pass import ExitPass
 from app.models.user import User
 
-LAGOS = timezone(timedelta(hours=1))  # WAT — no DST
-BUSINESS_DAY_START_HOUR = 6  # a nightlife "day" runs 6AM → 6AM Lagos time
-
-
-def business_day_start() -> datetime:
-    """Start of the current business day, in UTC.
-
-    UTC midnight is 1AM in Lagos — right in the middle of service — so a
-    calendar-day cutoff would split every Friday night's revenue across two
-    "days". Instead the day rolls over at 6AM WAT: everything from last
-    evening until this morning counts as one night.
-    """
-    now_lagos = datetime.now(LAGOS)
-    # Before 6AM we are still in yesterday's business day
-    anchor = now_lagos - timedelta(hours=BUSINESS_DAY_START_HOUR)
-    start_lagos = anchor.replace(
-        hour=BUSINESS_DAY_START_HOUR, minute=0, second=0, microsecond=0
-    )
-    return start_lagos.astimezone(timezone.utc)
+# Re-exported so existing callers and tests keep working. The definitions live
+# in utils/venue_time so promos and analytics cannot drift into disagreeing
+# about when a night starts.
+from app.utils.venue_time import (  # noqa: E402
+    BUSINESS_DAY_START_HOUR,
+    LAGOS,
+    business_day_start,
+)
 
 
 async def get_summary(db: AsyncSession, venue_id: str) -> dict:
