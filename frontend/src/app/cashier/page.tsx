@@ -5,8 +5,7 @@ import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
 import AuthGuard from "@/components/AuthGuard";
 import { formatNGN, timeAgo } from "@/lib/utils";
-import { WS_URL } from "@/lib/env";
-import { useReconnectingWS } from "@/lib/ws";
+import { useVenueChannel } from "@/lib/venueChannel";
 import { ORDER_STATUS_LABEL, needsPayment } from "@/lib/orderStatus";
 import {
   CreditCard,
@@ -82,31 +81,17 @@ function CashierContent() {
       .catch(() => {});
   }
 
-  // The till was the one screen with no live connection: it loaded once and
-  // after a payment, so a table that ordered while the cashier was watching
-  // simply did not appear. It joins the same venue channel as the floor.
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-  useReconnectingWS(
-    user && token ? `${WS_URL}/ws/${user.venue_id}?token=${token}` : null,
-    (msg) => {
-      if (
-        msg.event === "new_order_attendant" ||
-        msg.event === "bar_order_ready" ||
-        msg.event === "kitchen_order_ready" ||
-        msg.event === "payment_recorded" ||
-        // Moves a table from "still being served" into "ready to pay" the
-        // moment the last item is handed over.
-        msg.event === "order_item_update"
-      ) {
-        loadOrders();
-      }
-      if (msg.event === "new_order_attendant") {
-        const table = msg.data?.table_number ? `Table ${msg.data.table_number}` : "A table";
-        toast(`${table} just ordered`, { icon: "🧾", duration: 4000 });
-      }
+  // Orders, and only orders — the taxonomy decides which events that means.
+  useVenueChannel(user?.venue_id, {
+    onOrders: loadOrders,
+    on: {
+      new_order_attendant: (d) =>
+        toast(`${d?.table_number ? `Table ${d.table_number}` : "A table"} just ordered`, {
+          icon: "🧾",
+          duration: 4000,
+        }),
     },
-  );
+  });
 
   useEffect(() => {
     loadOrders();

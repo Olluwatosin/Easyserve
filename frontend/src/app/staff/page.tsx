@@ -9,7 +9,8 @@ import {
   isUnpaid,
   needsPayment,
 } from "@/lib/orderStatus";
-import { ConnectionBanner, useReconnectingWS } from "@/lib/ws";
+import { ConnectionBanner } from "@/lib/ws";
+import { useVenueChannel } from "@/lib/venueChannel";
 import { useAuthStore } from "@/stores/auth";
 import AuthGuard from "@/components/AuthGuard";
 import { formatNGN, timeAgo } from "@/lib/utils";
@@ -24,7 +25,6 @@ import {
   unlock,
 } from "@/lib/alertSound";
 import { useRouter } from "next/navigation";
-import { WS_URL } from "@/lib/env";
 
 interface Alert {
   acknowledged_by: string | null;
@@ -98,69 +98,55 @@ function StaffContent() {
   }, []);
 
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-  const wsStatus = useReconnectingWS(
-    user && token
-      ? `${WS_URL}/ws/${user.venue_id}?token=${token}`
-      : null,
-    (msg) => {
-      // Every transition a station makes — accepted, ready, served, voided.
-      // Without this the floor sees whatever was true when the page loaded,
-      // which is the one thing a live board must never do.
-      if (msg.event === "order_item_update") {
-        loadOrders();
-      }
-      if (msg.event === "new_order_attendant") {
-        loadOrders();
-        toast("New order arrived", { icon: "🛎️" });
-      }
-      if (msg.event === "bar_order_ready") {
-        const table = msg.data?.table_number ? ` — Table ${msg.data.table_number}` : "";
+  // Data refreshes are declared by what they touch; the taxonomy in
+  // lib/venueChannel maps events onto them, so a new server event cannot be
+  // silently ignored here again. `on` is only for behaviour — sounds, buzzes,
+  // toasts — and never replaces the refresh.
+  const wsStatus = useVenueChannel(user?.venue_id, {
+    onOrders: loadOrders,
+    onAlerts: loadAlerts,
+    on: {
+      new_order_attendant: () => toast("New order arrived", { icon: "🛎️" }),
+
+      bar_order_ready: (d) => {
+        const table = d?.table_number ? ` — Table ${d.table_number}` : "";
         setBuzz({ message: `🍸 Drinks ready${table}`, type: "bar" });
         playReady();
-        loadOrders();
-      }
-      if (msg.event === "kitchen_order_ready") {
-        const table = msg.data?.table_number ? ` — Table ${msg.data.table_number}` : "";
+      },
+      kitchen_order_ready: (d) => {
+        const table = d?.table_number ? ` — Table ${d.table_number}` : "";
         setBuzz({ message: `🍽️ Food ready${table}`, type: "kitchen" });
         playReady();
-        loadOrders();
-      }
-      if (msg.event === "new_alert") {
-        loadAlerts();
+      },
+
+      new_alert: (d) => {
         // Only the attendant this table belongs to is summoned. Everyone else
         // sees it appear quietly, so the room is not a wall of chimes.
-        const mine = !msg.data?.assigned_to || msg.data.assigned_to === user?.id;
-        if (mine) {
-          playNewAlert();
-          toast(
-            `${msg.data?.table_label ?? "A table"} needs you`,
-            { icon: "🔔", duration: 8000 },
-          );
-        }
-      }
-      if (msg.event === "alert_escalated") {
-        loadAlerts();
+        const mine = !d?.assigned_to || d.assigned_to === user?.id;
+        if (!mine) return;
+        playNewAlert();
+        toast(`${d?.table_label ?? "A table"} needs you`, {
+          icon: "🔔",
+          duration: 8000,
+        });
+      },
+      alert_escalated: (d) => {
         // Nobody answered in time, so this is now everyone's problem.
         playEscalation();
         toast(
-          `${msg.data?.table_label ?? "A table"} still waiting — ${msg.data?.waiting_seconds ?? 0}s`,
+          `${d?.table_label ?? "A table"} still waiting — ${d?.waiting_seconds ?? 0}s`,
           { icon: "⏰", duration: 10000 },
         );
-      }
-      if (msg.event === "alert_acknowledged") {
-        loadAlerts();
-        if (msg.data?.acknowledged_by && msg.data.acknowledged_by !== user?.id) {
-          toast(
-            `${msg.data.acknowledged_by_name ?? "Someone"} has ${msg.data.table_label ?? "it"}`,
-            { icon: "✅", duration: 4000 },
-          );
-        }
-      }
-      if (msg.event === "alert_resolved") {
-        loadAlerts();
-      }
-    }
-  );
+      },
+      alert_acknowledged: (d) => {
+        if (!d?.acknowledged_by || d.acknowledged_by === user?.id) return;
+        toast(`${d.acknowledged_by_name ?? "Someone"} has ${d.table_label ?? "it"}`, {
+          icon: "✅",
+          duration: 4000,
+        });
+      },
+    },
+  });
 
   async function takePayment(order: Order, method: "cash" | "pos") {
     setPayingOrder(order.id);

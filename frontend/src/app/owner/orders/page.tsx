@@ -2,11 +2,10 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
-import { useReconnectingWS } from "@/lib/ws";
+import { useVenueChannel } from "@/lib/venueChannel";
 import { useAuthStore } from "@/stores/auth";
 import { formatNGN, timeAgo, formatTime } from "@/lib/utils";
 import toast from "react-hot-toast";
-import { WS_URL } from "@/lib/env";
 
 /* ── Types ─────────────────────────────────────────────────────────── */
 
@@ -130,18 +129,9 @@ export default function OrdersPage() {
   }, [load]);
 
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-  useReconnectingWS(
-    user && token
-      ? `${WS_URL}/ws/${user.venue_id}?token=${token}`
-      : null,
-    (msg) => {
-      if (
-        ["new_order_attendant", "order_item_update", "payment_recorded"].includes(msg.event)
-      ) {
-        load();
-      }
-    }
-  );
+  // Was the only screen listening for order_item_update; now it says so by
+  // name instead of by a list that happened to be complete.
+  useVenueChannel(user?.venue_id, { onOrders: load });
 
   const displayed =
     filter === "active"

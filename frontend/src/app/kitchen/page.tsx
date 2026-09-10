@@ -2,14 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { ConnectionBanner, useReconnectingWS } from "@/lib/ws";
+import { ConnectionBanner } from "@/lib/ws";
 import { useAuthStore } from "@/stores/auth";
 import AuthGuard from "@/components/AuthGuard";
 import toast from "react-hot-toast";
 
 import { OfflineBanner, useOffline } from "@/lib/useOffline";
 import { CheckCircle, ChefHat, Clock } from "lucide-react";
-import { WS_URL } from "@/lib/env";
+import { useVenueChannel } from "@/lib/venueChannel";
 
 interface OrderItem {
   id: string;
@@ -95,26 +95,10 @@ function KitchenContent() {
   }, []);
 
   const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
-  const wsStatus = useReconnectingWS(
-    user && token
-      ? `${WS_URL}/ws/kitchen/${user.venue_id}?token=${token}`
-      : null,
-    (msg) => {
-      // A change made on another device — a second bartender accepting, an
-      // attendant marking delivered — must show here too. Filtered by type so
-      // the bar does not reload for kitchen traffic.
-      if (
-        msg.event === "order_item_update" &&
-        msg.data?.item_type === "food"
-      ) {
-        loadOrders();
-      }
-      if (msg.event === "new_order_kitchen") {
-        loadOrders();
-        toast("New food order!", { icon: "🍽️" });
-      }
-    }
-  );
+  const wsStatus = useVenueChannel(user?.venue_id, {
+    onOrders: loadOrders,
+    on: { new_order_kitchen: () => toast("🍽️ New food ticket", { icon: "🔔" }) },
+  });
 
   async function markPreparing(itemId: string) {
     await offline.submit({
