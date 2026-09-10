@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { Plus, UserX, KeyRound, X } from "lucide-react";
+import { KeyRound, Link as LinkIcon, MessageCircle, Plus, UserCheck, UserX, X } from "lucide-react";
 import toast from "react-hot-toast";
 
 const ROLES = ["attendant", "bartender", "kitchen", "cashier", "security"] as const;
@@ -132,6 +132,7 @@ function PinModal({ member, onClose }: { member: StaffMember; onClose: () => voi
 }
 
 export default function StaffPage() {
+  const [venueSlug, setVenueSlug] = useState("");
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [pinTarget, setPinTarget] = useState<StaffMember | null>(null);
@@ -140,6 +141,13 @@ export default function StaffPage() {
   });
 
   function load() { api.get("/staff").then((r) => setStaff(r.data)).catch(() => {}); }
+  useEffect(() => {
+    api
+      .get("/venues/me")
+      .then((r) => setVenueSlug(r.data?.slug ?? ""))
+      .catch(() => {});
+  }, []);
+
   useEffect(() => { load(); }, []);
 
   async function createStaff() {
@@ -153,6 +161,30 @@ export default function StaffPage() {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Failed to add staff";
       toast.error(msg);
     }
+  }
+
+  async function reactivate(id: string) {
+    try {
+      await api.patch(`/staff/${id}/reactivate`);
+      toast.success("Reactivated — set a new PIN if the old one should not work");
+      load();
+    } catch {
+      toast.error("Could not reactivate");
+    }
+  }
+
+  function copySignInLink() {
+    if (!venueSlug) return;
+    const link = `${window.location.origin}/pin-login?venue=${encodeURIComponent(venueSlug)}`;
+    navigator.clipboard.writeText(link);
+    toast.success("Sign-in link copied");
+  }
+
+  function shareOnWhatsApp() {
+    if (!venueSlug) return;
+    const link = `${window.location.origin}/pin-login?venue=${encodeURIComponent(venueSlug)}`;
+    const text = `Your EasyServe sign-in link:\n${link}\n\nOpen it on your phone and enter the 4-digit PIN I gave you.`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
   }
 
   async function deactivate(id: string) {
@@ -170,6 +202,34 @@ export default function StaffPage() {
           <h1 className="font-display text-3xl font-bold text-text">Staff</h1>
           <p className="text-muted text-sm mt-1">{staff.filter((s) => s.is_active).length} active members</p>
         </div>
+
+      <div
+        className="card mb-6 flex flex-wrap items-center gap-3"
+        style={{ background: "rgba(0,212,180,0.05)", border: "1px solid rgba(0,212,180,0.2)" }}
+      >
+        <LinkIcon size={16} style={{ color: "var(--teal)", flexShrink: 0 }} />
+        <div className="flex-1 min-w-[220px]">
+          <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+            Staff sign-in link
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>
+            Send this to your team. It opens straight to the keypad — no venue
+            name to type. Give each person their PIN separately, never in the
+            same message.
+          </p>
+        </div>
+        <button onClick={shareOnWhatsApp} className="btn-teal px-4 text-sm">
+          <MessageCircle size={14} /> WhatsApp
+        </button>
+        <button
+          onClick={copySignInLink}
+          className="px-4 py-2 rounded-lg text-sm font-medium"
+          style={{ border: "1px solid rgba(255,255,255,0.14)", color: "var(--text-soft)" }}
+        >
+          Copy link
+        </button>
+      </div>
+
         <button onClick={() => setShowForm(true)} className="btn-teal flex items-center gap-2">
           <Plus size={16} /> Add Staff
         </button>
@@ -263,9 +323,26 @@ export default function StaffPage() {
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  {member.is_active && (
-                    <button onClick={() => deactivate(member.id)} className="p-1.5 text-muted hover:text-red-400">
+                  {member.is_active ? (
+                    <button
+                      onClick={() => deactivate(member.id)}
+                      title="Deactivate"
+                      className="p-1.5 text-muted hover:text-red-400"
+                    >
                       <UserX size={14} />
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => reactivate(member.id)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium"
+                      style={{
+                        background: "rgba(0,212,180,0.08)",
+                        border: "1px solid rgba(0,212,180,0.15)",
+                        color: "var(--teal)",
+                      }}
+                    >
+                      <UserCheck size={11} />
+                      Reactivate
                     </button>
                   )}
                 </td>

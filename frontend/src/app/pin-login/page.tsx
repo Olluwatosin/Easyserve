@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { getRoleHome } from "@/components/AuthGuard";
@@ -18,10 +19,24 @@ const ROLES = [
   { icon: "🔒", role: "Security", desc: "Exit QR scanner" },
 ];
 
-export default function PinLoginPage() {
+function PinLoginContent() {
   const [venue, setVenue] = useState("");
   const [pin, setPin] = useState("");
   const [step, setStep] = useState<"venue" | "pin">("venue");
+  const params = useSearchParams();
+
+  // The venue comes from the link the manager shared, or from the last
+  // successful sign-in on this device. Staff should not be typing a slug
+  // correctly at 8pm on a busy floor.
+  useEffect(() => {
+    const fromLink = params.get("venue")?.trim();
+    const remembered = localStorage.getItem("venue_slug");
+    const slug = fromLink || remembered;
+    if (slug) {
+      setVenue(slug);
+      setStep("pin");
+    }
+  }, [params]);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -43,6 +58,8 @@ export default function PinLoginPage() {
         venue_slug: venue.trim(),
         pin: p,
       });
+      // Remember the venue so the next shift starts straight at the keypad.
+      localStorage.setItem("venue_slug", venue.trim());
       localStorage.setItem("access_token", data.access_token);
       localStorage.setItem("refresh_token", data.refresh_token);
       const payload = JSON.parse(atob(data.access_token.split(".")[1]));
@@ -415,5 +432,13 @@ export default function PinLoginPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function PinLoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <PinLoginContent />
+    </Suspense>
   );
 }

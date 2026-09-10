@@ -1,5 +1,5 @@
 import uuid
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -41,12 +41,10 @@ async def create_staff(
 ):
     allowed_roles = {"attendant", "bartender", "kitchen", "cashier", "security"}
     if req.role not in allowed_roles:
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {allowed_roles}")
 
     result = await db.execute(select(User).where(User.email == req.email))
     if result.scalar_one_or_none():
-        from fastapi import HTTPException
         raise HTTPException(status_code=400, detail="Email already registered")
 
     user = User(
@@ -71,7 +69,6 @@ async def set_staff_pin(
     current_user: User = Depends(require_roles("owner")),
     db: AsyncSession = Depends(get_db),
 ):
-    from fastapi import HTTPException
     if len(req.pin) != 4 or not req.pin.isdigit():
         raise HTTPException(status_code=400, detail="PIN must be exactly 4 digits")
     result = await db.execute(
@@ -97,3 +94,37 @@ async def deactivate_staff(
     if user:
         user.is_active = False
         await db.commit()
+
+
+@router.patch("/{user_id}/reactivate", response_model=UserResponse)
+async def reactivate_staff(
+    user_id: str,
+    current_user: User = Depends(require_roles("owner")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Bring a deactivated staff member back.
+
+    Deactivation was already reversible in the data — is_active is a flag, not a
+    delete — but nothing could turn it back on, so anyone switched off was
+    switched off permanently. Seasonal staff and anyone deactivated by mistake
+    both needed rehiring from scratch.
+
+    Their old PIN still works afterwards, which is why any session issued before
+    now is cut off: if they were deactivated because they left, whatever was
+    signed in on a phone somewhere must not simply resume. Set a fresh PIN from
+    the staff page if the old one should not be honoured either.
+    """
+    from datetime import datetime, timezone
+
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.venue_id == current_user.venue_id)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+
+    user.is_active = True
+    user.tokens_valid_after = datetime.now(timezone.utc)
+    await db.commit()
+    await db.refresh(user)
+    return user
