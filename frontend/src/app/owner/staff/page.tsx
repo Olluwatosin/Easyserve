@@ -12,9 +12,12 @@ interface StaffMember {
   id: string;
   full_name: string;
   email: string;
+  phone: string | null;
   role: StaffRole;
   zone: string | null;
   is_active: boolean;
+  /** Whether a keypad PIN exists. Never the PIN itself — it cannot be read back. */
+  has_pin: boolean;
 }
 
 const ROLE_COLORS: Record<StaffRole, string> = {
@@ -27,9 +30,34 @@ const ROLE_COLORS: Record<StaffRole, string> = {
 
 const PAD_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"];
 
-function PinModal({ member, onClose }: { member: StaffMember; onClose: () => void }) {
-  const [pin, setPin] = useState("");
+/**
+ * Set a PIN, then hand it to the person it belongs to.
+ *
+ * A PIN is stored hashed and cannot be read back — so the moment just after
+ * setting one is the only moment anybody can see it. Closing the dialog there,
+ * as this used to, meant a forgotten PIN read on the floor as a broken login
+ * with nothing to explain it.
+ *
+ * The message is composed here, in the browser, and opens in the owner's own
+ * WhatsApp. The PIN was typed on this screen, so it never travels to our
+ * servers in the clear and never lands in a log.
+ */
+function PinModal({
+  member,
+  venueSlug,
+  presetPin,
+  onClose,
+  onSaved,
+}: {
+  member: StaffMember;
+  venueSlug: string;
+  presetPin?: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [pin, setPin] = useState(presetPin ?? "");
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(Boolean(presetPin));
 
   function press(key: string) {
     if (key === "del") { setPin((p) => p.slice(0, -1)); return; }
@@ -41,13 +69,38 @@ function PinModal({ member, onClose }: { member: StaffMember; onClose: () => voi
     setSaving(true);
     try {
       await api.patch(`/staff/${member.id}/pin`, { pin });
-      toast.success(`PIN set for ${member.full_name}`);
-      onClose();
+      setSaved(true);
+      onSaved();
     } catch {
       toast.error("Failed to set PIN");
     } finally {
       setSaving(false);
     }
+  }
+
+  const signInLink =
+    typeof window === "undefined"
+      ? ""
+      : venueSlug
+        ? `${window.location.origin}/pin-login?venue=${encodeURIComponent(venueSlug)}`
+        : `${window.location.origin}/pin-login`;
+
+  function sendOnWhatsApp() {
+    const firstName = member.full_name.split(" ")[0];
+    const text =
+      `Hi ${firstName} — here is your EasyServe sign-in.\n\n` +
+      `Open: ${signInLink}\n` +
+      `Your PIN: ${pin}\n\n` +
+      `Keep this to yourself. If you forget it, ask me and I'll set a new one.`;
+    // With a number we open that chat directly; without one WhatsApp asks the
+    // owner to pick the contact.
+    const to = member.phone ? member.phone.replace(/\D/g, "") : "";
+    window.open(`https://wa.me/${to}?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+  }
+
+  function copyPin() {
+    navigator.clipboard.writeText(pin);
+    toast.success("PIN copied");
   }
 
   return (
@@ -77,11 +130,70 @@ function PinModal({ member, onClose }: { member: StaffMember; onClose: () => voi
             <KeyRound size={15} className="text-teal" />
           </div>
           <div>
-            <p className="font-semibold text-sm" style={{ color: "var(--text)" }}>Set PIN</p>
+            <p className="font-semibold text-sm" style={{ color: "var(--text)" }}>
+              {saved ? "Send it to them" : member.has_pin ? "Change PIN" : "Set PIN"}
+            </p>
             <p className="text-xs" style={{ color: "var(--muted)" }}>{member.full_name}</p>
           </div>
         </div>
 
+        {saved ? (
+          <div className="space-y-4">
+            <div
+              className="rounded-xl px-4 py-4 text-center"
+              style={{
+                background: "rgba(0,212,180,0.07)",
+                border: "1px solid rgba(0,212,180,0.25)",
+              }}
+            >
+              <p className="text-xs mb-1.5" style={{ color: "var(--muted)" }}>
+                {member.full_name.split(" ")[0]}&rsquo;s PIN
+              </p>
+              <p
+                className="font-bold tabular-nums"
+                style={{ fontSize: "30px", letterSpacing: "0.28em", color: "var(--teal)" }}
+              >
+                {pin}
+              </p>
+            </div>
+
+            <p className="text-xs leading-relaxed" style={{ color: "var(--muted)" }}>
+              This is the only time it can be shown. PINs are stored scrambled, so
+              nobody — not even you — can look one up later. If it&rsquo;s
+              forgotten, just set a new one.
+            </p>
+
+            <button onClick={sendOnWhatsApp} className="btn-teal w-full">
+              <MessageCircle size={14} />
+              {member.phone ? "Send on WhatsApp" : "Send on WhatsApp…"}
+            </button>
+
+            <div className="flex gap-2">
+              <button
+                onClick={copyPin}
+                className="flex-1 py-2 rounded-lg text-sm font-medium"
+                style={{ border: "1px solid rgba(255,255,255,0.14)", color: "var(--text-soft)" }}
+              >
+                Copy PIN
+              </button>
+              <button
+                onClick={onClose}
+                className="flex-1 py-2 rounded-lg text-sm font-medium"
+                style={{ border: "1px solid rgba(255,255,255,0.14)", color: "var(--text-soft)" }}
+              >
+                Done
+              </button>
+            </div>
+
+            {!member.phone && (
+              <p className="text-xs" style={{ color: "var(--muted)" }}>
+                No phone number saved for {member.full_name.split(" ")[0]}, so
+                WhatsApp will ask you to pick the contact.
+              </p>
+            )}
+          </div>
+        ) : (
+        <>
         {/* Dots */}
         <div className="flex justify-center gap-4 mb-6">
           {[0, 1, 2, 3].map((i) => (
@@ -126,6 +238,13 @@ function PinModal({ member, onClose }: { member: StaffMember; onClose: () => voi
         >
           {saving ? "Saving…" : "Save PIN"}
         </button>
+
+        <p className="text-xs mt-3 leading-relaxed" style={{ color: "var(--muted)" }}>
+          You&rsquo;ll be able to send this to {member.full_name.split(" ")[0]} on
+          the next screen. It can&rsquo;t be looked up afterwards — only replaced.
+        </p>
+        </>
+        )}
       </div>
     </div>
   );
@@ -135,9 +254,12 @@ export default function StaffPage() {
   const [venueSlug, setVenueSlug] = useState("");
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [showForm, setShowForm] = useState(false);
-  const [pinTarget, setPinTarget] = useState<StaffMember | null>(null);
+  const [pinTarget, setPinTarget] = useState<
+    { member: StaffMember; presetPin?: string } | null
+  >(null);
   const [form, setForm] = useState({
-    full_name: "", email: "", password: "", role: "attendant" as StaffRole, zone: "",
+    full_name: "", email: "", password: "", role: "attendant" as StaffRole,
+    zone: "", phone: "", pin: "",
   });
 
   function load() { api.get("/staff").then((r) => setStaff(r.data)).catch(() => {}); }
@@ -152,10 +274,19 @@ export default function StaffPage() {
 
   async function createStaff() {
     try {
-      await api.post("/staff", { ...form, zone: form.zone || null });
+      const created = await api.post("/staff", {
+        ...form,
+        zone: form.zone || null,
+        phone: form.phone || null,
+      });
       toast.success("Staff member added");
       setShowForm(false);
-      setForm({ full_name: "", email: "", password: "", role: "attendant", zone: "" });
+      // Straight to the hand-off: this is the only moment the PIN can be shown.
+      setPinTarget({ member: created.data, presetPin: form.pin });
+      setForm({
+        full_name: "", email: "", password: "", role: "attendant",
+        zone: "", phone: "", pin: "",
+      });
       load();
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Failed to add staff";
@@ -195,7 +326,15 @@ export default function StaffPage() {
 
   return (
     <div>
-      {pinTarget && <PinModal member={pinTarget} onClose={() => setPinTarget(null)} />}
+      {pinTarget && (
+        <PinModal
+          member={pinTarget.member}
+          venueSlug={venueSlug}
+          presetPin={pinTarget.presetPin}
+          onClose={() => setPinTarget(null)}
+          onSaved={load}
+        />
+      )}
 
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -214,8 +353,8 @@ export default function StaffPage() {
           </p>
           <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>
             Send this to your team. It opens straight to the keypad — no venue
-            name to type. Give each person their PIN separately, never in the
-            same message.
+            name to type. The link is the same for everyone; only the PIN is
+            personal, so send that one to each person directly, never to a group.
           </p>
         </div>
         <button onClick={shareOnWhatsApp} className="btn-teal px-4 text-sm">
@@ -244,6 +383,7 @@ export default function StaffPage() {
               { key: "email", label: "Email", type: "email", placeholder: "jane@venue.com" },
               { key: "password", label: "Temp Password", type: "password", placeholder: "••••••••" },
               { key: "zone", label: "Zone (optional)", type: "text", placeholder: "VIP" },
+              { key: "phone", label: "WhatsApp number (optional)", type: "tel", placeholder: "0801 234 5678" },
             ].map(({ key, label, type, placeholder }) => (
               <div key={key}>
                 <label className="block text-text-soft text-sm mb-1.5">{label}</label>
@@ -266,14 +406,32 @@ export default function StaffPage() {
                 {ROLES.map((r) => <option key={r} value={r} className="capitalize">{r}</option>)}
               </select>
             </div>
+            <div>
+              <label className="block text-text-soft text-sm mb-1.5">4-digit PIN</label>
+              <input
+                className="input tabular-nums"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={4}
+                placeholder="e.g. 4821"
+                value={form.pin}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, pin: e.target.value.replace(/\D/g, "").slice(0, 4) }))
+                }
+              />
+            </div>
           </div>
           <p className="text-xs" style={{ color: "var(--muted)" }}>
-            After creating, set a 4-digit PIN so staff can sign in at the station.
+            The PIN is how they sign in at the station — without one they can&rsquo;t,
+            so it&rsquo;s set here rather than later. You&rsquo;ll get a chance to send
+            it to them straight after.
           </p>
           <div className="flex gap-3">
             <button
               onClick={createStaff}
-              disabled={!form.full_name || !form.email || !form.password}
+              disabled={
+                !form.full_name || !form.email || !form.password || form.pin.length !== 4
+              }
               className="btn-teal"
             >
               Add Member
@@ -308,18 +466,30 @@ export default function StaffPage() {
                 </td>
                 <td className="px-4 py-3">
                   {member.is_active && (
-                    <button
-                      onClick={() => setPinTarget(member)}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all"
-                      style={{
-                        background: "rgba(0,212,180,0.08)",
-                        border: "1px solid rgba(0,212,180,0.15)",
-                        color: "var(--teal)",
-                      }}
-                    >
-                      <KeyRound size={11} />
-                      Set PIN
-                    </button>
+                    <div className="flex items-center gap-2">
+                      {/* A missing PIN reads as a wrong PIN at the keypad, with
+                          nothing on the station explaining it. Say so here. */}
+                      {!member.has_pin && (
+                        <span
+                          className="badge-amber"
+                          title={`${member.full_name} cannot sign in at a station until a PIN is set`}
+                        >
+                          No PIN
+                        </span>
+                      )}
+                      <button
+                        onClick={() => setPinTarget({ member })}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all"
+                        style={{
+                          background: "rgba(0,212,180,0.08)",
+                          border: "1px solid rgba(0,212,180,0.15)",
+                          color: "var(--teal)",
+                        }}
+                      >
+                        <KeyRound size={11} />
+                        {member.has_pin ? "Change" : "Set PIN"}
+                      </button>
+                    </div>
                   )}
                 </td>
                 <td className="px-4 py-3">

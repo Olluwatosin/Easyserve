@@ -9,6 +9,7 @@ from app.dependencies import require_roles
 from app.models.user import User
 from app.schemas.auth import UserResponse
 from app.schemas.auth import SetPinRequest
+from app.services.whatsapp_service import normalise_phone
 from app.utils.security import hash_password
 
 router = APIRouter(prefix="/staff", tags=["staff"])
@@ -20,6 +21,20 @@ class StaffCreateRequest(BaseModel):
     password: str
     role: str
     zone: str | None = None
+    #: Required. A station account with no PIN cannot sign in at the keypad, and
+    #: nothing on the floor explains why — it simply reads as a wrong PIN. Making
+    #: it part of creation means that account cannot exist.
+    pin: str
+    #: Optional, for sending the PIN to this person on WhatsApp. Stored E.164.
+    phone: str | None = None
+
+
+def _validated_pin(pin: str) -> str:
+    """A PIN is four digits. Rejected here rather than at the keypad, where a
+    bad one is indistinguishable from a forgotten one."""
+    if len(pin) != 4 or not pin.isdigit():
+        raise HTTPException(status_code=400, detail="PIN must be exactly 4 digits")
+    return pin
 
 
 @router.get("", response_model=list[UserResponse])
@@ -43,9 +58,15 @@ async def create_staff(
     if req.role not in allowed_roles:
         raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {allowed_roles}")
 
+    _validated_pin(req.pin)
+
     result = await db.execute(select(User).where(User.email == req.email))
     if result.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
+
+    phone = normalise_phone(req.phone) if req.phone else None
+    if req.phone and not phone:
+        raise HTTPException(status_code=400, detail="That phone number is not valid")
 
     user = User(
         id=str(uuid.uuid4()),
@@ -53,6 +74,8 @@ async def create_staff(
         full_name=req.full_name,
         email=req.email,
         password_hash=hash_password(req.password),
+        pin_hash=hash_password(req.pin),
+        phone=phone,
         role=req.role,
         zone=req.zone,
     )
@@ -69,8 +92,7 @@ async def set_staff_pin(
     current_user: User = Depends(require_roles("owner")),
     db: AsyncSession = Depends(get_db),
 ):
-    if len(req.pin) != 4 or not req.pin.isdigit():
-        raise HTTPException(status_code=400, detail="PIN must be exactly 4 digits")
+    _validated_pin(req.pin)
     result = await db.execute(
         select(User).where(User.id == user_id, User.venue_id == current_user.venue_id)
     )

@@ -73,5 +73,7 @@ class UserResponse(BaseModel):
     role: str
     zone: str | None
     is_active: bool
+    #: Read from User.has_pin. Never the PIN itself, and never its hash.
+    has_pin: bool = False
 
     model_config = {"from_attributes": True}

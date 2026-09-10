@@ -38,6 +38,18 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
+    @property
+    def has_pin(self) -> bool:
+        """Whether this account can sign in at a station keypad.
+
+        A PIN is stored hashed and can never be read back, so the only thing an
+        owner can be shown is whether one exists. Staff created before this was
+        enforced — and owners, who sign in with an email — have none, and
+        without this flag a keypad login just fails with nothing on screen
+        explaining why.
+        """
+        return self.pin_hash is not None
+
     venue = relationship("Venue", back_populates="users")
     assigned_tables = relationship(
         "Table", back_populates="assigned_attendant", foreign_keys="Table.assigned_attendant_id"
