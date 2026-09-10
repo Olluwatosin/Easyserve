@@ -8,11 +8,53 @@ from app.database import get_db
 from app.dependencies import require_roles
 from app.models.payment import Payment
 from app.models.user import User
+from app.models.venue import Venue
 from app.schemas.payment import CashPaymentCreate, PaymentCreate, PaymentResponse
 from app.services import paystack_service
 from app.services.payment_service import confirm_gateway_payment, record_cash_payment, record_payment
 
 router = APIRouter(prefix="/payments", tags=["payments"])
+
+#: What an attendant may take at the table when the venue allows it.
+#: Cash gets counted at close and POS leaves a terminal receipt, so both have an
+#: independent record. A transfer has neither — nothing but the staff member's
+#: word confirms it arrived — so it stays with the cashier, or the guest pays
+#: from their own phone and the webhook confirms it.
+ATTENDANT_METHODS = {"cash", "pos"}
+
+
+async def _authorise_payment(
+    db: AsyncSession, user: User, method: str
+) -> None:
+    """Who may record this payment.
+
+    Owners and cashiers always may. Attendants may only when the venue has
+    turned it on, and only for methods with their own paper trail — a venue that
+    employs a cashier centralised money handling deliberately, and that choice
+    is theirs to keep.
+    """
+    if user.role in ("owner", "cashier"):
+        return
+
+    if user.role != "attendant":
+        raise HTTPException(status_code=403, detail="Insufficient permissions")
+
+    venue = (
+        await db.execute(select(Venue).where(Venue.id == user.venue_id))
+    ).scalar_one_or_none()
+    if venue is None or not venue.attendants_take_payment:
+        raise HTTPException(
+            status_code=403,
+            detail="Only the cashier can take payment at this venue",
+        )
+    if method not in ATTENDANT_METHODS:
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Attendants can take cash or POS. For a transfer, ask the guest "
+                "to pay from their phone or send them to the cashier."
+            ),
+        )
 
 
 @router.post("/webhook/paystack", include_in_schema=False)
@@ -37,9 +79,10 @@ async def paystack_webhook(request: Request, db: AsyncSession = Depends(get_db))
 @router.post("", status_code=201)
 async def create_payment(
     req: PaymentCreate,
-    current_user: User = Depends(require_roles("owner", "cashier")),
+    current_user: User = Depends(require_roles("owner", "cashier", "attendant")),
     db: AsyncSession = Depends(get_db),
 ):
+    await _authorise_payment(db, current_user, req.method)
     payment, exit_pass = await record_payment(db, req, current_user.id, current_user.venue_id)
     return {
         "payment": PaymentResponse.model_validate(payment),
@@ -50,9 +93,10 @@ async def create_payment(
 @router.post("/cash", status_code=201)
 async def create_cash_payment(
     req: CashPaymentCreate,
-    current_user: User = Depends(require_roles("owner", "cashier")),
+    current_user: User = Depends(require_roles("owner", "cashier", "attendant")),
     db: AsyncSession = Depends(get_db),
 ):
+    await _authorise_payment(db, current_user, "cash")
     payment, exit_pass = await record_cash_payment(db, req, current_user.id, current_user.venue_id)
     return {
         "payment": PaymentResponse.model_validate(payment),

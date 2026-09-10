@@ -12,6 +12,7 @@ class VenueResponse(BaseModel):
     plan: str
     is_active: bool
     exit_pass_minutes: int
+    attendants_take_payment: bool = False
     service_charge_pct: float
     vat_pct: float
     created_at: datetime
@@ -25,5 +26,6 @@ class VenueUpdate(BaseModel):
     city: str | None = None
     phone: str | None = None
     exit_pass_minutes: int | None = None
+    attendants_take_payment: bool | None = None
     service_charge_pct: float | None = None
     vat_pct: float | None = None

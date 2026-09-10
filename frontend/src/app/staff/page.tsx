@@ -2,11 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import {
+  ITEM_STATUS_LABEL,
+  ORDER_STATUS_COLOR,
+  ORDER_STATUS_LABEL,
+  isUnpaid,
+  needsPayment,
+} from "@/lib/orderStatus";
 import { ConnectionBanner, useReconnectingWS } from "@/lib/ws";
 import { useAuthStore } from "@/stores/auth";
 import AuthGuard from "@/components/AuthGuard";
 import { formatNGN, timeAgo } from "@/lib/utils";
-import { Bell, BellRing, CheckCircle, ChefHat, Clock, LogOut, Wine } from "lucide-react";
+import { Bell, BellRing, CheckCircle, ChefHat, Clock, LogOut, Wallet, Wine } from "lucide-react";
 import toast from "react-hot-toast";
 
 import {
@@ -38,6 +45,9 @@ interface OrderItem {
 }
 
 interface Order {
+  total_amount: number;
+  service_charge: number;
+  vat_amount: number;
   id: string;
   status: string;
   table_id: string | null;
@@ -53,18 +63,14 @@ const ITEM_STATUS_COLOR: Record<string, string> = {
   delivered: "#6B7A99",
 };
 
-const ORDER_STATUS_COLOR: Record<string, string> = {
-  open: "#00D4B4",
-  partially_served: "#FF9500",
-  fully_served: "#00D4B4",
-  paid: "#6B7A99",
-  cancelled: "#f87171",
-};
+
 
 function StaffContent() {
   const { user, logout } = useAuthStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [canTakePayment, setCanTakePayment] = useState(false);
+  const [payingOrder, setPayingOrder] = useState<string | null>(null);
   const [soundOn, setSoundOn] = useState(true);
   const [buzz, setBuzz] = useState<{
     message: string;
@@ -150,6 +156,42 @@ function StaffContent() {
     }
   );
 
+  async function takePayment(order: Order, method: "cash" | "pos") {
+    setPayingOrder(order.id);
+    try {
+      const due =
+        Number(order.total_amount) +
+        Number(order.service_charge ?? 0) +
+        Number(order.vat_amount ?? 0);
+      // Deliberately the same path the cashier uses — same cash confirmation,
+      // same audit row, same attribution in the shift report. A shortcut that
+      // merely flipped a status would put the whole floor outside the money
+      // trail this product exists to keep.
+      if (method === "cash") {
+        await api.post("/payments/cash", {
+          order_id: order.id,
+          amount: due,
+          cash_confirmed: true,
+        });
+      } else {
+        await api.post("/payments", {
+          order_id: order.id,
+          amount: due,
+          method: "pos",
+        });
+      }
+      toast.success("Payment recorded — the guest has their exit pass");
+      loadOrders();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail ?? "Could not record that payment";
+      toast.error(msg);
+    } finally {
+      setPayingOrder(null);
+    }
+  }
+
   async function markDelivered(itemId: string) {
     await api.patch(`/orders/items/${itemId}/status`, { status: "delivered" });
     loadOrders();
@@ -175,6 +217,18 @@ function StaffContent() {
   );
   const activeOrders = orders.filter(
     (o) => !["paid", "cancelled"].includes(o.status)
+  );
+
+  // The walkout risk in one figure. At close this is the only number on this
+  // screen that matters.
+  const unpaid = orders.filter((o) => needsPayment(o.status));
+  const unpaidValue = unpaid.reduce(
+    (sum, o) =>
+      sum +
+      Number(o.total_amount) +
+      Number(o.service_charge ?? 0) +
+      Number(o.vat_amount ?? 0),
+    0,
   );
 
   const initials =
@@ -345,6 +399,24 @@ function StaffContent() {
         )}
 
         {/* ── Alerts ── */}
+        {unpaid.length > 0 && (
+          <div
+            className="mb-5 rounded-xl px-4 py-3 flex flex-wrap items-center gap-2"
+            style={{
+              background: "rgba(255,149,0,0.08)",
+              border: "1px solid rgba(255,149,0,0.3)",
+            }}
+          >
+            <Wallet size={15} style={{ color: "var(--amber)", flexShrink: 0 }} />
+            <span className="text-sm flex-1" style={{ color: "var(--text-soft)" }}>
+              <strong style={{ color: "var(--amber)" }}>
+                {unpaid.length} table{unpaid.length === 1 ? "" : "s"}
+              </strong>{" "}
+              served and not yet paid · {formatNGN(unpaidValue)}
+            </span>
+          </div>
+        )}
+
         {openAlerts.length > 0 && (
           <section>
             <div className="flex items-center gap-2 mb-3">
@@ -431,6 +503,11 @@ function StaffContent() {
                 );
                 const statusColor =
                   ORDER_STATUS_COLOR[order.status] ?? "#6B7A99";
+                const due =
+                  Number(order.total_amount) +
+                  Number(order.service_charge ?? 0) +
+                  Number(order.vat_amount ?? 0);
+                const owing = needsPayment(order.status);
 
                 return (
                   <div
@@ -455,7 +532,7 @@ function StaffContent() {
                           className="text-xs font-semibold capitalize"
                           style={{ color: statusColor }}
                         >
-                          {order.status.replace(/_/g, " ")}
+                          {ORDER_STATUS_LABEL[order.status] ?? order.status.replace(/_/g, " ")}
                         </span>
                         {order.table_label && (
                           <span
@@ -533,6 +610,47 @@ function StaffContent() {
                         );
                       })}
                     </div>
+                    {owing && canTakePayment && (
+                      <div
+                        className="mt-3 pt-3 flex flex-wrap items-center gap-2"
+                        style={{ borderTop: "1px solid #1E2D42" }}
+                      >
+                        <span className="text-sm flex-1" style={{ color: "var(--text-soft)" }}>
+                          Due <strong style={{ color: "var(--amber)" }}>{formatNGN(due)}</strong>
+                        </span>
+                        <button
+                          onClick={() => takePayment(order, "cash")}
+                          disabled={payingOrder === order.id}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                          style={{
+                            background: "rgba(0,212,180,0.16)",
+                            border: "1px solid rgba(0,212,180,0.4)",
+                            color: "var(--teal)",
+                          }}
+                        >
+                          {payingOrder === order.id ? "Recording…" : "Cash received"}
+                        </button>
+                        <button
+                          onClick={() => takePayment(order, "pos")}
+                          disabled={payingOrder === order.id}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                          style={{
+                            border: "1px solid rgba(255,255,255,0.14)",
+                            color: "var(--text-soft)",
+                          }}
+                        >
+                          POS
+                        </button>
+                      </div>
+                    )}
+                    {owing && !canTakePayment && (
+                      <div
+                        className="mt-3 pt-3 text-xs"
+                        style={{ borderTop: "1px solid #1E2D42", color: "var(--muted)" }}
+                      >
+                        Due {formatNGN(due)} — send the guest to the cashier.
+                      </div>
+                    )}
                   </div>
                 );
               })}

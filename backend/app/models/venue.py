@@ -24,6 +24,15 @@ class Venue(Base):
         nullable=False,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    # Whether floor staff may take payment, or only the cashier.
+    #
+    # Off by default, and deliberately a venue decision rather than ours: a
+    # venue that employs a cashier has centralised money handling on purpose,
+    # and that is an internal control. Turning it on suits venues where the
+    # attendant is who stands at the table when the guest reaches for cash.
+    attendants_take_payment: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False
+    )
     exit_pass_minutes: Mapped[int] = mapped_column(default=10, nullable=False)
     # Bill percentages (10.00 = 10%). Snapshotted onto each order at creation.
     service_charge_pct: Mapped[float] = mapped_column(Numeric(5, 2), default=0, nullable=False)

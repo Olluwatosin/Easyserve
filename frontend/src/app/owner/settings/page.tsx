@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
-import { Eye, EyeOff, KeyRound, MessageCircle } from "lucide-react";
+import { Eye, EyeOff, KeyRound, MessageCircle, Wallet } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface Venue {
@@ -25,6 +25,7 @@ const PLAN_FEATURES: Record<string, string[]> = {
 
 export default function SettingsPage() {
   const [recoveryPhone, setRecoveryPhone] = useState("");
+  const [attendantsPay, setAttendantsPay] = useState(false);
   const [savingPhone, setSavingPhone] = useState(false);
   const [phoneSaved, setPhoneSaved] = useState(false);
 
@@ -52,6 +53,21 @@ export default function SettingsPage() {
       .catch(() => {});
   }, []);
 
+  async function toggleAttendantsPay(next: boolean) {
+    setAttendantsPay(next);
+    try {
+      await api.patch("/venues/me", { attendants_take_payment: next });
+      toast.success(
+        next
+          ? "Attendants can now take cash and POS at the table"
+          : "Only the cashier can take payment",
+      );
+    } catch {
+      setAttendantsPay(!next);
+      toast.error("Could not change that");
+    }
+  }
+
   async function saveRecoveryPhone() {
     setSavingPhone(true);
     try {
@@ -70,6 +86,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     api.get("/venues/me").then((r) => {
+      setAttendantsPay(Boolean(r.data?.attendants_take_payment));
       setVenue(r.data);
       setExitMinutes(r.data.exit_pass_minutes);
       setServiceChargePct(Number(r.data.service_charge_pct ?? 0));
@@ -205,6 +222,37 @@ export default function SettingsPage() {
               <div className="h-4 bg-bg-hover rounded w-1/3" />
             </div>
           )}
+        </div>
+
+        {/* Who handles money. A venue with a cashier has centralised this
+            deliberately, so it stays off until the owner says otherwise. */}
+        <div className="card space-y-4">
+          <div className="flex items-center gap-2">
+            <Wallet size={18} style={{ color: "var(--teal)" }} />
+            <h2 className="font-display text-lg font-semibold text-text">
+              Who takes payment
+            </h2>
+          </div>
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={attendantsPay}
+              onChange={(e) => toggleAttendantsPay(e.target.checked)}
+              className="w-4 h-4 rounded accent-teal mt-0.5"
+            />
+            <span>
+              <span className="block text-sm" style={{ color: "var(--text)" }}>
+                Let attendants take cash and POS at the table
+              </span>
+              <span className="block text-xs mt-1 leading-relaxed" style={{ color: "var(--muted)" }}>
+                Suits venues without a cashier on duty. Every payment is still
+                recorded against the person who took it and appears in the shift
+                report. Bank transfers always stay with the cashier, or the guest
+                pays from their own phone — nothing else confirms a transfer
+                arrived.
+              </span>
+            </span>
+          </label>
         </div>
 
         {/* Password recovery — without a number saved here the WhatsApp reset
