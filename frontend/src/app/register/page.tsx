@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { EsLogo } from "@/components/EsLogo";
-import { NightlifeScene } from "@/components/NightlifeScene";
+import { HeroArt } from "@/components/HeroArt";
 
 // Self-hosted gradient backdrop — no third-party image dependency at runtime.
 const HERO_BG =
@@ -66,20 +66,26 @@ export default function RegisterPage() {
     <main className="min-h-screen flex bg-bg overflow-hidden">
       {/* ── Left hero panel (desktop only) ── */}
       <div className="hidden lg:flex lg:w-[45%] relative flex-shrink-0">
-        <NightlifeScene className="absolute inset-0 w-full h-full" />
-        <div className="absolute inset-0" style={{ background: HERO_BG, opacity: 0.34 }} />
+        {/* Narrower panel than login, so the crop holds further right to keep
+            the glass off the edge. */}
+        <HeroArt
+          className="absolute inset-0"
+          position="72% 55%"
+          sizes="(min-width: 1024px) 45vw, 100vw"
+          priority
+        />
         <div
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(135deg, rgba(255,149,0,0.1) 0%, rgba(8,13,20,0.55) 55%)",
+              "linear-gradient(135deg, rgba(255,149,0,0.12) 0%, transparent 42%)",
           }}
         />
         <div
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(0deg, rgba(8,13,20,0.93) 0%, rgba(8,13,20,0.1) 45%, transparent 100%)",
+              "linear-gradient(0deg, rgba(8,13,20,0.94) 0%, rgba(8,13,20,0.45) 26%, rgba(8,13,20,0.05) 58%, transparent 100%)",
           }}
         />
 
@@ -128,12 +134,19 @@ export default function RegisterPage() {
 
       {/* ── Right: form panel ── */}
       <div className="flex-1 relative flex items-center justify-center px-6 py-10 overflow-hidden">
-        {/* Mobile background */}
+        {/* Mobile background — heavier veil, the form sits straight on top. */}
         <div className="absolute inset-0 lg:hidden overflow-hidden">
-          <div className="absolute inset-0" style={{ background: HERO_BG }} />
+          <HeroArt className="absolute inset-0" position="70% 50%" sizes="100vw" />
           <div
             className="absolute inset-0"
-            style={{ background: "rgba(8,13,20,0.7)" }}
+            style={{ background: "rgba(8,13,20,0.82)" }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(8,13,20,0.55) 0%, rgba(8,13,20,0.88) 100%)",
+            }}
           />
         </div>
 

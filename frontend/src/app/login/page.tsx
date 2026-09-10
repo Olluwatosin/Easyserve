@@ -7,7 +7,7 @@ import { getRoleHome } from "@/components/AuthGuard";
 import { Eye, EyeOff } from "lucide-react";
 import toast from "react-hot-toast";
 import { EsLogo } from "@/components/EsLogo";
-import { NightlifeScene } from "@/components/NightlifeScene";
+import { HeroArt } from "@/components/HeroArt";
 import { publicApi } from "@/lib/publicApi";
 
 // Self-hosted gradient backdrop — no third-party image dependency at runtime.
@@ -77,21 +77,23 @@ export default function LoginPage() {
     <main className="min-h-screen flex bg-bg overflow-hidden">
       {/* ── Left hero panel (desktop only) ── */}
       <div className="hidden lg:flex lg:w-[56%] relative flex-shrink-0">
-        <NightlifeScene className="absolute inset-0 w-full h-full" />
-        <div className="absolute inset-0" style={{ background: HERO_BG, opacity: 0.34 }} />
-        {/* Dark gradient overlays */}
+        <HeroArt className="absolute inset-0" priority />
+        {/* Only what the type needs, and no more — the photograph is the point.
+            A whisper of brand teal at the top-left where the wordmark sits… */}
         <div
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(135deg, rgba(0,212,180,0.12) 0%, rgba(8,13,20,0.55) 55%)",
+              "linear-gradient(135deg, rgba(0,212,180,0.14) 0%, transparent 42%)",
           }}
         />
+        {/* …and a foot dark enough to carry the tagline, released by mid-frame
+            so the glass and the ice keep their highlights. */}
         <div
           className="absolute inset-0"
           style={{
             background:
-              "linear-gradient(0deg, rgba(8,13,20,0.92) 0%, rgba(8,13,20,0.1) 45%, transparent 100%)",
+              "linear-gradient(0deg, rgba(8,13,20,0.94) 0%, rgba(8,13,20,0.45) 26%, rgba(8,13,20,0.05) 58%, transparent 100%)",
           }}
         />
 
@@ -130,12 +132,22 @@ export default function LoginPage() {
 
       {/* ── Right: form panel ── */}
       <div className="flex-1 relative flex items-center justify-center px-6 py-12 overflow-hidden">
-        {/* Mobile background fallback */}
+        {/* Mobile: the same room, behind a heavier veil. The form sits directly
+            on top here rather than beside it, so this leans much darker than the
+            desktop panel — enough that the glass reads as depth, not as clutter
+            competing with the inputs. */}
         <div className="absolute inset-0 lg:hidden overflow-hidden">
-          <div className="absolute inset-0" style={{ background: HERO_BG }} />
+          <HeroArt className="absolute inset-0" position="70% 50%" sizes="100vw" />
           <div
             className="absolute inset-0"
-            style={{ background: "rgba(8,13,20,0.7)" }}
+            style={{ background: "rgba(8,13,20,0.82)" }}
+          />
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(180deg, rgba(8,13,20,0.55) 0%, rgba(8,13,20,0.88) 100%)",
+            }}
           />
         </div>
 
