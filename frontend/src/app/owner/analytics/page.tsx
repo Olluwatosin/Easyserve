@@ -35,6 +35,7 @@ export default function AnalyticsPage() {
   const [staffScores, setStaffScores] = useState<StaffScore[] | null>(null);
   const [feedback, setFeedback] = useState<FeedbackSummary | null>(null);
   const [inventory, setInventory] = useState<InventoryAlert[] | null>(null);
+  const [itemsBy, setItemsBy] = useState<"revenue" | "order_count">("revenue");
   const [planError, setPlanError] = useState(false);
 
   useEffect(() => {
@@ -91,12 +92,35 @@ export default function AnalyticsPage() {
         {/* Top Items */}
         <section>
           <h2 className="font-display text-xl font-semibold text-text mb-4">Top Menu Items</h2>
-          <p className="text-sm mb-3" style={{ color: "var(--muted)" }}>
-            By revenue
-          </p>
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            {/* One bottle can out-earn a whole night of beer, which flattens
+                every other bar to a few pixels. Revenue answers "what makes
+                money", quantity answers "what actually moves" — both are real
+                questions and neither is a substitute for the other. */}
+            {(["revenue", "order_count"] as const).map((k) => (
+              <button
+                key={k}
+                onClick={() => setItemsBy(k)}
+                className="rounded-lg px-3 py-1.5 text-xs font-medium"
+                style={{
+                  background: itemsBy === k ? "rgba(0,212,180,0.16)" : "transparent",
+                  border: `1px solid ${itemsBy === k ? "rgba(0,212,180,0.45)" : "rgba(255,255,255,0.10)"}`,
+                  color: itemsBy === k ? "var(--teal)" : "var(--muted)",
+                }}
+              >
+                {k === "revenue" ? "By revenue" : "By quantity sold"}
+              </button>
+            ))}
+          </div>
           {planError ? <PlanGate /> : topItems ? (
             <div className="card space-y-4">
-              <TopItemsChart data={topItems} formatValue={formatNGN} />
+              <TopItemsChart
+                data={[...topItems].sort((a, b) => b[itemsBy] - a[itemsBy])}
+                valueKey={itemsBy}
+                formatValue={(v) =>
+                  itemsBy === "revenue" ? formatNGN(v) : String(v)
+                }
+              />
               <details>
                 <summary
                   className="text-xs cursor-pointer"

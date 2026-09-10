@@ -18,6 +18,9 @@ from datetime import date, datetime, time, timedelta, timezone
 #: West Africa Time. No daylight saving, so a fixed offset is exact.
 LAGOS = timezone(timedelta(hours=1))
 
+#: The same zone by name, for SQL that has to convert on the database side.
+VENUE_TZ_NAME = "Africa/Lagos"
+
 #: A nightlife "day" runs 6AM → 6AM local.
 BUSINESS_DAY_START_HOUR = 6
 

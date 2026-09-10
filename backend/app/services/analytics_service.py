@@ -18,6 +18,7 @@ from app.models.user import User
 # in utils/venue_time so promos and analytics cannot drift into disagreeing
 # about when a night starts.
 from app.utils.venue_time import (  # noqa: E402
+    VENUE_TZ_NAME,
     BUSINESS_DAY_START_HOUR,
     LAGOS,
     business_day_start,
@@ -115,12 +116,22 @@ async def get_tonight_summary(db: AsyncSession, venue_id: str) -> dict:
 
 
 async def get_peak_hours(db: AsyncSession, venue_id: str) -> list[dict]:
+    """Orders by hour of the venue's own clock, over the last 7 days.
+
+    Extracted in local time, not UTC. Lagos is an hour ahead, so a UTC hour
+    would report the busiest moment of a Nigerian venue an hour before it
+    happened — and an owner reading "we peak at 10pm" would staff for the wrong
+    hour. Same class of mistake as promo windows evaluated in UTC.
+    """
     seven_days_ago = datetime.now(timezone.utc) - timedelta(days=7)
+    local_hour = func.extract(
+        "hour", func.timezone(VENUE_TZ_NAME, Order.created_at)
+    )
     result = await db.execute(
-        select(func.extract("hour", Order.created_at).label("hour"), func.count(Order.id).label("cnt"))
+        select(local_hour.label("hour"), func.count(Order.id).label("cnt"))
         .where(Order.venue_id == venue_id, Order.created_at >= seven_days_ago)
-        .group_by("hour")
-        .order_by("hour")
+        .group_by(local_hour)
+        .order_by(local_hour)
     )
     return [{"hour": int(r.hour), "order_count": r.cnt} for r in result.all()]
 
