@@ -5,6 +5,9 @@ import { api } from "@/lib/api";
 import { useAuthStore } from "@/stores/auth";
 import AuthGuard from "@/components/AuthGuard";
 import { formatNGN, timeAgo } from "@/lib/utils";
+import { WS_URL } from "@/lib/env";
+import { useReconnectingWS } from "@/lib/ws";
+import { ORDER_STATUS_LABEL, needsPayment } from "@/lib/orderStatus";
 import {
   CreditCard,
   Banknote,
@@ -17,6 +20,9 @@ import toast from "react-hot-toast";
 import { useRouter } from "next/navigation";
 
 interface Order {
+  total_amount: number;
+  service_charge: number;
+  vat_amount: number;
   id: string;
   status: string;
   table_label: string | null;
@@ -53,6 +59,16 @@ function CashierContent() {
   const [done, setDone] = useState(false);
   const router = useRouter();
 
+  // A cashier's queue is not "every unpaid order" — a table still waiting on
+  // its food cannot pay yet. Ready first, in the order they became ready.
+  const readyToPay = orders.filter((o) => needsPayment(o.status));
+  const stillServing = orders.filter((o) => !needsPayment(o.status));
+  const dueOf = (o: Order) =>
+    Number(o.total_amount ?? 0) +
+    Number(o.service_charge ?? 0) +
+    Number(o.vat_amount ?? 0);
+  const totalDue = readyToPay.reduce((sum, o) => sum + dueOf(o), 0);
+
   function loadOrders() {
     api
       .get("/orders")
@@ -65,6 +81,29 @@ function CashierContent() {
       )
       .catch(() => {});
   }
+
+  // The till was the one screen with no live connection: it loaded once and
+  // after a payment, so a table that ordered while the cashier was watching
+  // simply did not appear. It joins the same venue channel as the floor.
+  const token =
+    typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  useReconnectingWS(
+    user && token ? `${WS_URL}/ws/${user.venue_id}?token=${token}` : null,
+    (msg) => {
+      if (
+        msg.event === "new_order_attendant" ||
+        msg.event === "bar_order_ready" ||
+        msg.event === "kitchen_order_ready" ||
+        msg.event === "payment_recorded"
+      ) {
+        loadOrders();
+      }
+      if (msg.event === "new_order_attendant") {
+        const table = msg.data?.table_number ? `Table ${msg.data.table_number}` : "A table";
+        toast(`${table} just ordered`, { icon: "🧾", duration: 4000 });
+      }
+    },
+  );
 
   useEffect(() => {
     loadOrders();
@@ -180,9 +219,9 @@ function CashierContent() {
               className="text-xs font-semibold uppercase tracking-widest"
               style={{ color: "var(--muted)" }}
             >
-              Unpaid Orders
+              Open Tables
             </p>
-            {orders.length > 0 && (
+            {readyToPay.length > 0 && (
               <span
                 className="text-xs font-bold px-2 py-0.5 rounded-full"
                 style={{
@@ -190,7 +229,7 @@ function CashierContent() {
                   color: "var(--amber)",
                 }}
               >
-                {orders.length}
+                {readyToPay.length} ready · {formatNGN(totalDue)}
               </span>
             )}
           </div>
@@ -209,7 +248,20 @@ function CashierContent() {
               </p>
             </div>
           ) : (
-            orders.map((order) => {
+            [
+              { label: "Ready to pay", rows: readyToPay },
+              { label: "Still being served", rows: stillServing },
+            ]
+              .filter((g) => g.rows.length > 0)
+              .flatMap((group) => [
+                <p
+                  key={group.label}
+                  className="text-xs font-semibold uppercase tracking-widest px-1 pt-2"
+                  style={{ color: "var(--muted)" }}
+                >
+                  {group.label} ({group.rows.length})
+                </p>,
+                ...group.rows.map((order) => {
               const orderTotal = order.items.reduce(
                 (s, i) => s + i.price * i.quantity,
                 0
@@ -277,7 +329,8 @@ function CashierContent() {
                   )}
                 </button>
               );
-            })
+                }),
+              ])
           )}
         </div>
 
