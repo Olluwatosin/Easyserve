@@ -21,6 +21,16 @@ export const metadata: Metadata = {
   description: "Hospitality Operating System for African nightlife venues",
   manifest: "/manifest.json",
   appleWebApp: { capable: true, statusBarStyle: "black-translucent" },
+  icons: {
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    // iOS ignores the manifest and needs an opaque icon of its own;
+    // without it "Add to Home Screen" gives a screenshot thumbnail.
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+  },
 };
 
 export const viewport: Viewport = {

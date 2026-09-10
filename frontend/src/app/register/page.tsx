@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import toast from "react-hot-toast";
 import { EsLogo } from "@/components/EsLogo";
+import { NightlifeScene } from "@/components/NightlifeScene";
 
 // Self-hosted gradient backdrop — no third-party image dependency at runtime.
 const HERO_BG =
@@ -65,7 +66,8 @@ export default function RegisterPage() {
     <main className="min-h-screen flex bg-bg overflow-hidden">
       {/* ── Left hero panel (desktop only) ── */}
       <div className="hidden lg:flex lg:w-[45%] relative flex-shrink-0">
-        <div className="absolute inset-0" style={{ background: HERO_BG }} />
+        <NightlifeScene className="absolute inset-0 w-full h-full" />
+        <div className="absolute inset-0" style={{ background: HERO_BG, opacity: 0.72 }} />
         <div
           className="absolute inset-0"
           style={{

@@ -7,6 +7,7 @@ import { getRoleHome } from "@/components/AuthGuard";
 import { Eye, EyeOff } from "lucide-react";
 import toast from "react-hot-toast";
 import { EsLogo } from "@/components/EsLogo";
+import { NightlifeScene } from "@/components/NightlifeScene";
 import { publicApi } from "@/lib/publicApi";
 
 // Self-hosted gradient backdrop — no third-party image dependency at runtime.
@@ -76,7 +77,8 @@ export default function LoginPage() {
     <main className="min-h-screen flex bg-bg overflow-hidden">
       {/* ── Left hero panel (desktop only) ── */}
       <div className="hidden lg:flex lg:w-[56%] relative flex-shrink-0">
-        <div className="absolute inset-0" style={{ background: HERO_BG }} />
+        <NightlifeScene className="absolute inset-0 w-full h-full" />
+        <div className="absolute inset-0" style={{ background: HERO_BG, opacity: 0.72 }} />
         {/* Dark gradient overlays */}
         <div
           className="absolute inset-0"
