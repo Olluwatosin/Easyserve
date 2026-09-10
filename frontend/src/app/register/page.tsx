@@ -67,7 +67,7 @@ export default function RegisterPage() {
       {/* ── Left hero panel (desktop only) ── */}
       <div className="hidden lg:flex lg:w-[45%] relative flex-shrink-0">
         <NightlifeScene className="absolute inset-0 w-full h-full" />
-        <div className="absolute inset-0" style={{ background: HERO_BG, opacity: 0.72 }} />
+        <div className="absolute inset-0" style={{ background: HERO_BG, opacity: 0.34 }} />
         <div
           className="absolute inset-0"
           style={{

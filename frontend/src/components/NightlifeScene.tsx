@@ -27,21 +27,21 @@ export function NightlifeScene({ className = "" }: { className?: string }) {
       <defs>
         {/* The room: deep teal falling away to near-black */}
         <linearGradient id="ns-room" x1="0" y1="0" x2="0.4" y2="1">
-          <stop offset="0%" stopColor="#0F2A33" />
-          <stop offset="45%" stopColor="#0A1620" />
+          <stop offset="0%" stopColor="#164253" />
+          <stop offset="45%" stopColor="#0C1E2B" />
           <stop offset="100%" stopColor="#06090F" />
         </linearGradient>
 
         {/* Backbar wash behind the bottles */}
         <radialGradient id="ns-backbar" cx="0.5" cy="0.32" r="0.62">
-          <stop offset="0%" stopColor="#00D4B4" stopOpacity="0.30" />
-          <stop offset="55%" stopColor="#00A88F" stopOpacity="0.10" />
+          <stop offset="0%" stopColor="#00D4B4" stopOpacity="0.52" />
+          <stop offset="55%" stopColor="#00A88F" stopOpacity="0.20" />
           <stop offset="100%" stopColor="#00A88F" stopOpacity="0" />
         </radialGradient>
 
         {/* Warm lamp low and right */}
         <radialGradient id="ns-lamp" cx="0.82" cy="0.78" r="0.5">
-          <stop offset="0%" stopColor="#FF9500" stopOpacity="0.24" />
+          <stop offset="0%" stopColor="#FF9500" stopOpacity="0.38" />
           <stop offset="100%" stopColor="#FF9500" stopOpacity="0" />
         </radialGradient>
 
@@ -75,7 +75,7 @@ export function NightlifeScene({ className = "" }: { className?: string }) {
       <rect width="480" height="640" fill="url(#ns-lamp)" />
 
       {/* ── Bokeh: out-of-focus lights across the back of the room ── */}
-      <g filter="url(#ns-bokeh)" opacity="0.55">
+      <g filter="url(#ns-bokeh)" opacity="0.85">
         <circle cx="82" cy="104" r="20" fill="#00D4B4" opacity="0.30" />
         <circle cx="150" cy="62" r="11" fill="#7DE8D6" opacity="0.26" />
         <circle cx="392" cy="128" r="26" fill="#FF9500" opacity="0.16" />
@@ -90,14 +90,14 @@ export function NightlifeScene({ className = "" }: { className?: string }) {
       <rect x="0" y="468" width="480" height="2.5" fill="#00D4B4" opacity="0.30" />
 
       {/* ── Backbar bottles, staggered so the shelf reads as depth ── */}
-      <g opacity="0.5">
+      <g opacity="0.9">
         {[
-          { x: 44, h: 132, w: 30, fill: "#0E3A38" },
-          { x: 88, h: 168, w: 26, fill: "#12494A" },
-          { x: 126, h: 120, w: 32, fill: "#0B3230" },
-          { x: 342, h: 150, w: 28, fill: "#123F3C" },
-          { x: 382, h: 116, w: 34, fill: "#0E3634" },
-          { x: 428, h: 158, w: 26, fill: "#12494A" },
+          { x: 44, h: 132, w: 30, fill: "#14555A" },
+          { x: 88, h: 168, w: 26, fill: "#186A6B" },
+          { x: 126, h: 120, w: 32, fill: "#114B4A" },
+          { x: 342, h: 150, w: 28, fill: "#166163" },
+          { x: 382, h: 116, w: 34, fill: "#135453" },
+          { x: 428, h: 158, w: 26, fill: "#186A6B" },
         ].map((b, i) => (
           <g key={i}>
             <rect
@@ -108,7 +108,7 @@ export function NightlifeScene({ className = "" }: { className?: string }) {
               rx={b.w * 0.32}
               fill={b.fill}
               stroke="#00D4B4"
-              strokeOpacity="0.22"
+              strokeOpacity="0.5"
             />
             {/* neck */}
             <rect
@@ -119,7 +119,7 @@ export function NightlifeScene({ className = "" }: { className?: string }) {
               rx="3"
               fill={b.fill}
               stroke="#00D4B4"
-              strokeOpacity="0.18"
+              strokeOpacity="0.42"
             />
             {/* a highlight down one side, so glass reads as glass */}
             <rect
@@ -129,7 +129,7 @@ export function NightlifeScene({ className = "" }: { className?: string }) {
               height={b.h - 30}
               rx="1.5"
               fill="#BFF7EC"
-              opacity="0.16"
+              opacity="0.4"
             />
           </g>
         ))}
@@ -186,8 +186,8 @@ export function NightlifeScene({ className = "" }: { className?: string }) {
       <rect width="480" height="640" fill="url(#ns-vig)" />
       <defs>
         <radialGradient id="ns-vig" cx="0.5" cy="0.45" r="0.78">
-          <stop offset="55%" stopColor="#06090F" stopOpacity="0" />
-          <stop offset="100%" stopColor="#06090F" stopOpacity="0.85" />
+          <stop offset="62%" stopColor="#06090F" stopOpacity="0" />
+          <stop offset="100%" stopColor="#06090F" stopOpacity="0.72" />
         </radialGradient>
       </defs>
     </svg>

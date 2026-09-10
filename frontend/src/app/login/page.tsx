@@ -78,7 +78,7 @@ export default function LoginPage() {
       {/* ── Left hero panel (desktop only) ── */}
       <div className="hidden lg:flex lg:w-[56%] relative flex-shrink-0">
         <NightlifeScene className="absolute inset-0 w-full h-full" />
-        <div className="absolute inset-0" style={{ background: HERO_BG, opacity: 0.72 }} />
+        <div className="absolute inset-0" style={{ background: HERO_BG, opacity: 0.34 }} />
         {/* Dark gradient overlays */}
         <div
           className="absolute inset-0"
