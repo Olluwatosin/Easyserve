@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { PeakHoursChart, TopItemsChart } from "@/components/charts";
 import { formatNGN } from "@/lib/utils";
 import { Lock } from "lucide-react";
 
@@ -10,7 +11,12 @@ interface TopItem { name: string; order_count: number; revenue: number; }
 interface SlowTable { label: string; avg_minutes: number; }
 interface StaffScore { full_name: string; avg_minutes: number; orders_handled: number; }
 interface FeedbackSummary { avg_rating: number; total_responses: number; }
-interface InventoryAlert { name: string; order_count: number; }
+interface InventoryAlert {
+  name: string;
+  stock_quantity: number;
+  stock_threshold: number;
+  is_out: boolean;
+}
 
 function PlanGate() {
   return (
@@ -72,53 +78,66 @@ export default function AnalyticsPage() {
         {/* Peak Hours */}
         <section>
           <h2 className="font-display text-xl font-semibold text-text mb-4">Peak Hours</h2>
+          <p className="text-sm mb-3" style={{ color: "var(--muted)" }}>
+            Orders by hour, last 7 days
+          </p>
           {planError ? <PlanGate /> : peakHours ? (
             <div className="card">
-              <div className="flex items-end gap-1.5 h-32">
-                {peakHours.map((h) => {
-                  const max = Math.max(...peakHours.map((x) => x.order_count), 1);
-                  const height = Math.max(4, (h.order_count / max) * 100);
-                  return (
-                    <div key={h.hour} className="flex-1 flex flex-col items-center gap-1">
-                      <div
-                        className="w-full bg-teal/30 rounded-sm hover:bg-teal/50 transition-colors"
-                        style={{ height: `${height}%` }}
-                        title={`${h.order_count} orders`}
-                      />
-                      <span className="text-muted text-xs">{h.hour}</span>
-                    </div>
-                  );
-                })}
-              </div>
+              <PeakHoursChart data={peakHours} />
             </div>
-          ) : <div className="card animate-pulse h-32" />}
+          ) : <div className="card animate-pulse h-56" />}
         </section>
 
         {/* Top Items */}
         <section>
           <h2 className="font-display text-xl font-semibold text-text mb-4">Top Menu Items</h2>
+          <p className="text-sm mb-3" style={{ color: "var(--muted)" }}>
+            By revenue
+          </p>
           {planError ? <PlanGate /> : topItems ? (
-            <div className="card overflow-hidden p-0">
-              <table className="w-full text-sm">
-                <thead className="bg-bg-hover">
-                  <tr>
-                    {["Item", "Orders", "Revenue"].map((h) => (
-                      <th key={h} className="px-4 py-3 text-left text-muted font-medium text-xs">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {topItems.slice(0, 10).map((item, i) => (
-                    <tr key={i} className="border-t border-border">
-                      <td className="px-4 py-3 text-text font-medium">{item.name}</td>
-                      <td className="px-4 py-3 text-muted">{item.order_count}</td>
-                      <td className="px-4 py-3 text-teal font-semibold">{formatNGN(item.revenue)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="card space-y-4">
+              <TopItemsChart data={topItems} formatValue={formatNGN} />
+              <details>
+                <summary
+                  className="text-xs cursor-pointer"
+                  style={{ color: "var(--muted)" }}
+                >
+                  Show as a table
+                </summary>
+                <div className="overflow-x-auto mt-3">
+                  <table className="w-full text-sm" style={{ minWidth: 340 }}>
+                    <thead>
+                      <tr style={{ color: "var(--muted)" }}>
+                        {["Item", "Sold", "Revenue"].map((h) => (
+                          <th
+                            key={h}
+                            className={`pb-2 font-medium ${h === "Item" ? "text-left" : "text-right"}`}
+                          >
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topItems.slice(0, 8).map((item) => (
+                        <tr key={item.name} style={{ borderTop: "1px solid #1E2D42" }}>
+                          <td className="py-2" style={{ color: "var(--text-soft)" }}>
+                            {item.name}
+                          </td>
+                          <td className="py-2 text-right tabular-nums" style={{ color: "var(--muted)" }}>
+                            {item.order_count}
+                          </td>
+                          <td className="py-2 text-right tabular-nums" style={{ color: "var(--text)" }}>
+                            {formatNGN(item.revenue)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
             </div>
-          ) : <div className="card animate-pulse h-48" />}
+          ) : <div className="card animate-pulse h-56" />}
         </section>
 
         {/* Slow Tables */}
@@ -172,7 +191,9 @@ export default function AnalyticsPage() {
               {inventory.map((item) => (
                 <div key={item.name} className="card flex items-center justify-between">
                   <p className="text-text font-medium">{item.name}</p>
-                  <span className="badge-amber">{item.order_count} orders today</span>
+                  <span className={item.is_out ? "badge-muted" : "badge-amber"}>
+                    {item.is_out ? "Out of stock" : `${item.stock_quantity} left`}
+                  </span>
                 </div>
               ))}
             </div>
