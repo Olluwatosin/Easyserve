@@ -10,6 +10,7 @@ import toast from "react-hot-toast";
 
 import { newRequestId } from "@/lib/offline";
 import { OfflineBanner, useOffline } from "@/lib/useOffline";
+import { WS_URL } from "@/lib/env";
 import { useRouter } from "next/navigation";
 
 // ── Interfaces ────────────────────────────────────────────────────────────────
@@ -207,6 +208,14 @@ function LoadingSkeleton() {
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
+type AlertType = "call_attendant" | "request_payment" | "order_more";
+
+const ALERT_OPTIONS: { type: AlertType; label: string }[] = [
+  { type: "call_attendant", label: "Call an attendant" },
+  { type: "request_payment", label: "Bring me the bill" },
+  { type: "order_more", label: "I want to order more" },
+];
+
 export default function CustomerMenuPage({
   params,
 }: {
@@ -219,10 +228,38 @@ export default function CustomerMenuPage({
   const [alertOpen, setAlertOpen] = useState(false);
   const [placing, setPlacing] = useState(false);
   const offline = useOffline();
+  const [alertStatus, setAlertStatus] = useState<"idle" | "sent" | string>("idle");
   const [orderSent, setOrderSent] = useState(false);
   const [guestPhone, setGuestPhone] = useState("");
 
   // Remember the guest's phone across visits (loyalty recognition)
+
+  // The guest already has a session; connecting it here means "notified" can be
+  // followed by "Amara is on her way" instead of silence, which is what makes
+  // people give up and shout.
+  useEffect(() => {
+    const token = sessionToken.current;
+    if (!token) return;
+    let ws: WebSocket | null = null;
+    try {
+      ws = new WebSocket(`${WS_URL}/ws/customer/${token}`);
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          if (msg.event === "alert_acknowledged" && msg.data?.message) {
+            setAlertStatus(msg.data.message);
+            toast.success(msg.data.message, { duration: 8000 });
+          }
+        } catch {
+          /* ignore malformed frames */
+        }
+      };
+    } catch {
+      /* no socket — the alert still reaches staff over HTTP */
+    }
+    return () => ws?.close();
+  }, []);
+
   useEffect(() => {
     const saved = localStorage.getItem("guest_phone");
     if (saved) setGuestPhone(saved);
@@ -288,16 +325,17 @@ export default function CustomerMenuPage({
     }
   }
 
-  async function sendAlert() {
+  async function sendAlert(type: AlertType = "call_attendant") {
     try {
       await offline.submit({
         method: "POST",
         url: `/customer/alerts/${qr_token}`,
         kind: "alert",
-        label: "Call attendant",
-        body: { type: "call_attendant" },
+        label: ALERT_OPTIONS.find((o) => o.type === type)?.label ?? "Call attendant",
+        body: { type, session_token: sessionToken.current },
       });
-      toast.success("Attendant notified!");
+      setAlertStatus("sent");
+      toast.success("Sent — someone will come over");
       setAlertOpen(false);
     } catch {
       toast.error("Could not send alert");
@@ -317,6 +355,19 @@ export default function CustomerMenuPage({
   return (
     <div className="min-h-screen pb-28" style={{ background: "var(--bg)" }}>
       <OfflineBanner state={offline} />
+      {alertStatus !== "idle" && alertStatus !== "sent" && (
+        <div
+          className="fixed top-0 inset-x-0 z-50 px-4 py-2.5 text-sm text-center font-medium"
+          style={{
+            background: "rgba(0,212,180,0.16)",
+            borderBottom: "1px solid rgba(0,212,180,0.4)",
+            color: "var(--teal)",
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          {alertStatus}
+        </div>
+      )}
 
       {/* ── Hero header (non-sticky) ── */}
       <div className="relative w-full h-52 overflow-hidden">
@@ -1003,19 +1054,34 @@ export default function CustomerMenuPage({
               Need assistance? Tap below and our team will be with you shortly. No waiting, no shouting.
             </p>
 
-            {/* Amber CTA */}
-            <button
-              onClick={sendAlert}
-              className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl font-bold text-sm mb-3 transition-all"
-              style={{
-                background: "linear-gradient(135deg, #FF9500 0%, #FFB347 100%)",
-                color: "#080D14",
-                boxShadow: "0 8px 24px rgba(255,149,0,0.4), 0 2px 8px rgba(0,0,0,0.4)",
-              }}
-            >
-              <Bell size={16} />
-              Notify Attendant
-            </button>
+            {/* The three reasons people actually wave at staff. "Bring the bill"
+                was already supported by the API and had no way to be sent. */}
+            <div className="space-y-2.5 mb-3">
+              {ALERT_OPTIONS.map((opt, i) => (
+                <button
+                  key={opt.type}
+                  onClick={() => sendAlert(opt.type)}
+                  className="w-full flex items-center justify-center gap-2.5 py-3.5 rounded-xl font-bold text-sm transition-all"
+                  style={
+                    i === 0
+                      ? {
+                          background: "linear-gradient(135deg, #FF9500 0%, #FFB347 100%)",
+                          color: "#080D14",
+                          boxShadow:
+                            "0 8px 24px rgba(255,149,0,0.4), 0 2px 8px rgba(0,0,0,0.4)",
+                        }
+                      : {
+                          background: "rgba(255,255,255,0.05)",
+                          border: "1px solid rgba(255,255,255,0.14)",
+                          color: "var(--text)",
+                        }
+                  }
+                >
+                  <Bell size={16} />
+                  {opt.label}
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => setAlertOpen(false)}
               className="btn-outline w-full"

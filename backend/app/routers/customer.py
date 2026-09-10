@@ -133,7 +133,7 @@ async def get_bill(session_token: str, db: AsyncSession = Depends(get_db)):
 @router.post("/alerts/{qr_token}", response_model=AlertResponse)
 @limiter.limit("5/minute")
 async def send_alert(request: Request, qr_token: str, req: AlertCreate, db: AsyncSession = Depends(get_db)):
-    return await create_alert(db, qr_token, req.type)
+    return await create_alert(db, qr_token, req.type, req.session_token)
 
 
 @router.post("/feedback/{order_id}", response_model=FeedbackResponse)

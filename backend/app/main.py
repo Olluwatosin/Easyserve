@@ -51,8 +51,20 @@ from app.services.ws_manager import manager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import asyncio
+
+    from app.services.alert_service import escalation_sweeper
+
     await manager.startup(settings.REDIS_URL)
+    # Raises guest alerts nobody has answered. A sweep rather than a timer per
+    # alert, so escalation survives a restart mid-service.
+    sweeper = asyncio.create_task(escalation_sweeper())
     yield
+    sweeper.cancel()
+    try:
+        await sweeper
+    except asyncio.CancelledError:
+        pass
     await manager.shutdown()
 
 

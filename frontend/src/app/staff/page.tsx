@@ -6,8 +6,16 @@ import { ConnectionBanner, useReconnectingWS } from "@/lib/ws";
 import { useAuthStore } from "@/stores/auth";
 import AuthGuard from "@/components/AuthGuard";
 import { formatNGN, timeAgo } from "@/lib/utils";
-import { Bell, LogOut, CheckCircle, Clock, ChefHat, Wine } from "lucide-react";
+import { Bell, BellRing, CheckCircle, ChefHat, Clock, LogOut, Wine } from "lucide-react";
 import toast from "react-hot-toast";
+
+import {
+  isUnlocked,
+  playEscalation,
+  playNewAlert,
+  playReady,
+  unlock,
+} from "@/lib/alertSound";
 import { useRouter } from "next/navigation";
 import { WS_URL } from "@/lib/env";
 
@@ -56,6 +64,7 @@ function StaffContent() {
   const { user, logout } = useAuthStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [soundOn, setSoundOn] = useState(true);
   const [buzz, setBuzz] = useState<{
     message: string;
     type: "bar" | "kitchen";
@@ -94,16 +103,45 @@ function StaffContent() {
       if (msg.event === "bar_order_ready") {
         const table = msg.data?.table_number ? ` — Table ${msg.data.table_number}` : "";
         setBuzz({ message: `🍸 Drinks ready${table}`, type: "bar" });
+        playReady();
         loadOrders();
       }
       if (msg.event === "kitchen_order_ready") {
         const table = msg.data?.table_number ? ` — Table ${msg.data.table_number}` : "";
         setBuzz({ message: `🍽️ Food ready${table}`, type: "kitchen" });
+        playReady();
         loadOrders();
       }
       if (msg.event === "new_alert") {
         loadAlerts();
-        toast("Table alert!", { icon: "🔔" });
+        // Only the attendant this table belongs to is summoned. Everyone else
+        // sees it appear quietly, so the room is not a wall of chimes.
+        const mine = !msg.data?.assigned_to || msg.data.assigned_to === user?.id;
+        if (mine) {
+          playNewAlert();
+          toast(
+            `${msg.data?.table_label ?? "A table"} needs you`,
+            { icon: "🔔", duration: 8000 },
+          );
+        }
+      }
+      if (msg.event === "alert_escalated") {
+        loadAlerts();
+        // Nobody answered in time, so this is now everyone's problem.
+        playEscalation();
+        toast(
+          `${msg.data?.table_label ?? "A table"} still waiting — ${msg.data?.waiting_seconds ?? 0}s`,
+          { icon: "⏰", duration: 10000 },
+        );
+      }
+      if (msg.event === "alert_acknowledged") {
+        loadAlerts();
+        if (msg.data?.acknowledged_by && msg.data.acknowledged_by !== user?.id) {
+          toast(
+            `${msg.data.acknowledged_by_name ?? "Someone"} has ${msg.data.table_label ?? "it"}`,
+            { icon: "✅", duration: 4000 },
+          );
+        }
       }
       if (msg.event === "alert_resolved") {
         loadAlerts();
@@ -230,6 +268,31 @@ function StaffContent() {
       </header>
 
       <div className="p-4 space-y-5">
+
+        {!soundOn && (
+          <button
+            onClick={async () => setSoundOn(await unlock())}
+            className="w-full mb-4 rounded-xl px-4 py-3 flex items-center gap-3 text-left"
+            style={{
+              background: "rgba(255,149,0,0.10)",
+              border: "1px solid rgba(255,149,0,0.35)",
+            }}
+          >
+            <BellRing size={17} style={{ color: "var(--amber)", flexShrink: 0 }} />
+            <span className="flex-1">
+              <span
+                className="block text-sm font-semibold"
+                style={{ color: "var(--amber)" }}
+              >
+                Turn on alert sound
+              </span>
+              <span className="block text-xs mt-0.5" style={{ color: "var(--text-soft)" }}>
+                Tap once per shift. Without it your phone stays silent when a
+                table calls.
+              </span>
+            </span>
+          </button>
+        )}
 
         {/* ── Alerts ── */}
         {openAlerts.length > 0 && (

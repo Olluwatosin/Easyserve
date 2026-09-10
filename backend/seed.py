@@ -212,7 +212,15 @@ async def seed():
                 capacity=capacity,
                 zone=zone,
                 qr_token=nid(),
-                assigned_attendant_id=staff_ids.get("attendant"),
+                # Amara covers VIP and the main floor; the terrace and bar are
+                # uncovered, which is normal and exercises both routing paths —
+                # an alert aimed at one attendant, and one that opens to the
+                # whole floor because nobody owns the table.
+                assigned_attendant_id=(
+                    staff_ids.get("attendant")
+                    if zone in ("VIP", "Main Floor")
+                    else None
+                ),
             ))
         await db.flush()
 
