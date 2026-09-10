@@ -20,6 +20,7 @@ interface StockItem {
   item_type: string;
   price: number;
   stock_quantity: number;
+  stock_pack_size: number;
   stock_threshold: number;
   is_low: boolean;
   is_out: boolean;
@@ -42,11 +43,27 @@ interface CountResult {
   items_counted: number;
 }
 
+/** Beer arrives, is stored and is counted by the crate. Asking someone to
+ *  type "293" at 2am invites exactly the error the count exists to catch, so
+ *  case goods are entered as crates plus whatever is loose. */
+function splitPacks(units: number, pack: number) {
+  if (pack <= 1) return { packs: 0, loose: units };
+  return { packs: Math.floor(units / pack), loose: units % pack };
+}
+
+function describeStock(units: number, pack: number): string {
+  if (pack <= 1) return String(units);
+  const { packs, loose } = splitPacks(units, pack);
+  if (packs === 0) return `${loose}`;
+  return loose === 0 ? `${packs} × ${pack}` : `${packs} × ${pack} + ${loose}`;
+}
+
 export default function StockPage() {
   const [items, setItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [counting, setCounting] = useState(false);
   const [counts, setCounts] = useState<Record<string, string>>({});
+  const [packCounts, setPackCounts] = useState<Record<string, string>>({});
   const [result, setResult] = useState<CountResult | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -85,14 +102,21 @@ export default function StockPage() {
 
   async function submitCount() {
     const payload: Record<string, number> = {};
-    for (const [id, raw] of Object.entries(counts)) {
-      if (raw.trim() === "") continue;
-      const n = Number(raw);
-      if (!Number.isInteger(n) || n < 0) {
+    for (const item of items) {
+      const looseRaw = counts[item.item_id] ?? "";
+      const packRaw = packCounts[item.item_id] ?? "";
+      if (looseRaw.trim() === "" && packRaw.trim() === "") continue;
+
+      const loose = looseRaw.trim() === "" ? 0 : Number(looseRaw);
+      const packs = packRaw.trim() === "" ? 0 : Number(packRaw);
+      if (
+        !Number.isInteger(loose) || loose < 0 ||
+        !Number.isInteger(packs) || packs < 0
+      ) {
         toast.error("Counts must be whole numbers, zero or more");
         return;
       }
-      payload[id] = n;
+      payload[item.item_id] = packs * (item.stock_pack_size || 1) + loose;
     }
     if (Object.keys(payload).length === 0) {
       toast.error("Enter at least one count");
@@ -104,6 +128,7 @@ export default function StockPage() {
       setResult(data);
       setCounting(false);
       setCounts({});
+      setPackCounts({});
       await load();
     } catch {
       toast.error("Could not save the count");
@@ -267,42 +292,83 @@ export default function StockPage() {
               <p className="text-sm" style={{ color: "var(--text-soft)" }}>{item.name}</p>
               <p className="text-xs" style={{ color: "var(--muted)" }}>
                 {formatNGN(item.price)} · reorder at {item.stock_threshold}
+                {item.stock_pack_size > 1 && ` · crate of ${item.stock_pack_size}`}
               </p>
             </div>
 
             {counting ? (
-              <input
-                className="input w-24 text-center tabular-nums"
-                type="number"
-                min={0}
-                inputMode="numeric"
-                placeholder={String(item.stock_quantity)}
-                value={counts[item.item_id] ?? ""}
-                onChange={(e) =>
-                  setCounts((c) => ({ ...c, [item.item_id]: e.target.value }))
-                }
-              />
+              item.stock_pack_size > 1 ? (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    className="input w-16 text-center tabular-nums"
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    placeholder={String(splitPacks(item.stock_quantity, item.stock_pack_size).packs)}
+                    value={packCounts[item.item_id] ?? ""}
+                    onChange={(e) =>
+                      setPackCounts((c) => ({ ...c, [item.item_id]: e.target.value }))
+                    }
+                    aria-label={`Crates of ${item.name}`}
+                  />
+                  <span className="text-xs" style={{ color: "var(--muted)" }}>
+                    ×{item.stock_pack_size} +
+                  </span>
+                  <input
+                    className="input w-16 text-center tabular-nums"
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    placeholder={String(splitPacks(item.stock_quantity, item.stock_pack_size).loose)}
+                    value={counts[item.item_id] ?? ""}
+                    onChange={(e) =>
+                      setCounts((c) => ({ ...c, [item.item_id]: e.target.value }))
+                    }
+                    aria-label={`Loose bottles of ${item.name}`}
+                  />
+                </div>
+              ) : (
+                <input
+                  className="input w-24 text-center tabular-nums"
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  placeholder={String(item.stock_quantity)}
+                  value={counts[item.item_id] ?? ""}
+                  onChange={(e) =>
+                    setCounts((c) => ({ ...c, [item.item_id]: e.target.value }))
+                  }
+                />
+              )
             ) : (
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => adjust(item, -1, "waste")}
-                  title="Record one wasted or broken"
+                  onClick={() => adjust(item, -(item.stock_pack_size || 1), "waste")}
+                  title={
+                    item.stock_pack_size > 1
+                      ? `Remove one crate of ${item.stock_pack_size}`
+                      : "Record one wasted or broken"
+                  }
                   className="w-8 h-8 rounded-lg flex items-center justify-center"
                   style={{ border: "1px solid #1E2D42", color: "var(--muted)" }}
                 >
                   <Minus size={14} />
                 </button>
                 <span
-                  className="w-12 text-center text-sm font-semibold tabular-nums"
+                  className="min-w-[5.5rem] text-center text-sm font-semibold tabular-nums"
                   style={{
                     color: item.is_out ? "#f87171" : item.is_low ? "var(--amber)" : "var(--text)",
                   }}
                 >
-                  {item.stock_quantity}
+                  {describeStock(item.stock_quantity, item.stock_pack_size)}
                 </span>
                 <button
-                  onClick={() => adjust(item, 1, "restock")}
-                  title="Add one to stock"
+                  onClick={() => adjust(item, item.stock_pack_size || 1, "restock")}
+                  title={
+                    item.stock_pack_size > 1
+                      ? `Add one crate of ${item.stock_pack_size}`
+                      : "Add one to stock"
+                  }
                   className="w-8 h-8 rounded-lg flex items-center justify-center"
                   style={{ border: "1px solid #1E2D42", color: "var(--muted)" }}
                 >
@@ -320,8 +386,9 @@ export default function StockPage() {
             {busy ? "Saving…" : "Save count"}
           </button>
           <p className="text-xs" style={{ color: "var(--muted)" }}>
-            Enter what is physically on the shelf. Leave a box empty to skip that
-            item — only what you count is compared.
+            Enter what is physically on the shelf. Case goods take crates and
+            loose bottles separately. Leave a row blank to skip it — only what
+            you count is compared.
           </p>
         </div>
       )}

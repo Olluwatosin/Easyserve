@@ -67,7 +67,17 @@ MENU = [
         ("Classic Negroni",     4_000,  "drink", "Gin, vermouth, Campari, orange"),
         ("Whiskey Sour",        3_800,  "drink", "Bourbon, lemon, honey syrup"),
     ]),
-    ("Small Plates", 3, [
+    ("Beers & Ciders", 3, [
+        ("Star Lager",            1_500,  "drink", "Chilled, 60cl"),
+        ("Gulder",                1_600,  "drink", "Full-bodied lager"),
+        ("Trophy",                1_400,  "drink", "Light and crisp"),
+        ("Heineken",              2_500,  "drink", "Imported premium lager"),
+        ("Legend Extra Stout",    1_800,  "drink", "Rich, dark, full stout"),
+        ("Guinness Foreign Extra",2_200,  "drink", "The classic stout"),
+        ("Orijin Bitters",        1_700,  "drink", "Herbal, bittersweet"),
+        ("Smirnoff Ice",          2_000,  "drink", "Ready-to-drink, citrus"),
+    ]),
+    ("Small Plates", 4, [
         ("Grilled Tiger Prawns",   12_000, "food", "Flame-grilled, garlic butter sauce"),
         ("Beef Suya Skewers",       8_500, "food", "Spiced wagyu skewers, peanut dip"),
         ("Truffle Fries",           4_500, "food", "Hand-cut, truffle oil, parmesan"),
@@ -75,7 +85,7 @@ MENU = [
         ("Peppersoup (Goatmeat)",   6_500, "food", "Spicy, aromatic, slow-cooked"),
         ("Crispy Calamari",         7_000, "food", "Lemon aioli, chilli flakes"),
     ]),
-    ("Bottles & Packages", 4, [
+    ("Bottles & Packages", 5, [
         ("Ace of Spades (Gold)",  180_000, "drink", "Gold bottle, table service"),
         ("Dom Pérignon",          120_000, "drink", "Vintage champagne, prestige cuvée"),
         ("Hennessy Paradis",       95_000, "drink", "Rare blend, ultra-premium cognac"),
@@ -98,6 +108,14 @@ TABLES = [
 
 # Opening stock for the demo: a couple deliberately low so the alerts have
 # something to show, and one at zero so "out of stock" is visible too.
+# Case goods: how many units come in a crate. Beer is bought, delivered and
+# counted by the crate, never bottle by bottle.
+PACK_SIZES = {
+    "Star Lager": 24, "Gulder": 24, "Trophy": 24, "Heineken": 24,
+    "Legend Extra Stout": 24, "Guinness Foreign Extra": 24,
+    "Orijin Bitters": 24, "Smirnoff Ice": 24,
+}
+
 STOCK_LEVELS = {
     "Hennessy XO": 2,
     "Ace of Spades (Gold)": 0,
@@ -105,6 +123,15 @@ STOCK_LEVELS = {
     "Moët & Chandon": 11,
     "Hennessy VS": 24,
     "Johnnie Walker Black": 16,
+    # Beer moves in volume: whole crates plus whatever is loose in the fridge.
+    "Star Lager": 288,               # 12 crates
+    "Gulder": 174,                   # 7 crates + 6
+    "Trophy": 96,                    # 4 crates
+    "Heineken": 41,
+    "Legend Extra Stout": 120,
+    "Guinness Foreign Extra": 72,
+    "Orijin Bitters": 18,            # under a crate — reorder
+    "Smirnoff Ice": 55,
 }
 
 STAFF = [
@@ -207,7 +234,10 @@ async def seed():
                 item_map[name] = (iid, price, itype)
                 # Bottles and packages are counted; cocktails mixed to order
                 # and kitchen plates are not, which is how a real bar works.
-                tracked = cat_name in ("Premium Spirits", "Bottles & Packages")
+                tracked = cat_name in (
+                    "Premium Spirits", "Bottles & Packages", "Beers & Ciders"
+                )
+                pack = PACK_SIZES.get(name, 1)
                 db.add(MenuItem(
                     id=iid,
                     venue_id=venue_id,
@@ -217,12 +247,15 @@ async def seed():
                     item_type=itype,
                     description=desc,
                     stock_quantity=STOCK_LEVELS.get(name, 18) if tracked else None,
-                    stock_threshold=3 if tracked else 10,
+                    stock_pack_size=pack,
+                    # Reorder a case good when it drops below one full crate;
+                    # spirits when only a few bottles remain.
+                    stock_threshold=(pack if pack > 1 else 3) if tracked else 10,
                 ))
         await db.flush()
 
         _known = {n for _, _, items in MENU for n, *_ in items}
-        _typos = set(STOCK_LEVELS) - _known
+        _typos = (set(STOCK_LEVELS) | set(PACK_SIZES)) - _known
         assert not _typos, f"STOCK_LEVELS names not on the menu: {sorted(_typos)}"
 
         # ── Promos ───────────────────────────────────────────────────────────

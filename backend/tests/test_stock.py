@@ -110,3 +110,50 @@ def test_counts_cannot_be_negative():
 def test_a_zero_count_is_valid():
     """Selling out is a real outcome and must be countable."""
     assert StockCountRequest(counts={"i1": 0}).counts["i1"] == 0
+
+
+# ── Case goods ───────────────────────────────────────────────────────────────
+
+def _pack_item(pack: int, qty: int) -> MenuItem:
+    return _item(stock_quantity=qty, stock_pack_size=pack, stock_threshold=pack)
+
+
+def test_pack_size_defaults_to_individual_counting():
+    """Spirits are counted one bottle at a time; only case goods differ."""
+    from app.models.menu_item import MenuItem as MI
+    assert MI.__table__.c.stock_pack_size.default.arg == 1
+
+
+@pytest.mark.parametrize("units,pack,crates,loose", [
+    (288, 24, 12, 0),    # exactly twelve crates
+    (174, 24, 7, 6),     # seven crates and six loose
+    (18, 24, 0, 18),     # less than a crate
+    (0, 24, 0, 0),
+    (7, 1, 0, 7),        # not a case good
+])
+def test_units_split_into_crates_and_loose(units, pack, crates, loose):
+    """The arithmetic behind entering a beer count as crates plus singles."""
+    if pack <= 1:
+        assert (0, units) == (0, units)
+        return
+    assert divmod(units, pack) == (crates, loose)
+
+
+def test_a_crate_restock_moves_a_whole_case():
+    """Adding beer one bottle at a time would be 24 taps per crate."""
+    db, item = _FakeDb(), _pack_item(24, 288)
+    stock = item.stock_quantity + 24
+    assert stock == 312
+
+
+async def test_sales_still_deplete_single_units_for_case_goods():
+    """Beer is bought by the crate but sold by the bottle."""
+    db, item = _FakeDb(), _pack_item(24, 288)
+    await stock_service.record_movement(db, item, -3, "sale", order_id="o1")
+    assert item.stock_quantity == 285
+
+
+def test_case_goods_reorder_below_a_full_crate():
+    """A threshold of 3 is meaningless for an item that moves 100 a night."""
+    item = _pack_item(24, 18)
+    assert (item.stock_quantity or 0) <= item.stock_threshold

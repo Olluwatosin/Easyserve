@@ -28,7 +28,11 @@ class MenuItem(Base):
     # Units on hand. NULL means this item is not stock-tracked — a cocktail
     # made to order has no meaningful count, a bottle of Hennessy does.
     stock_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # Warn the owner at or below this level.
+    # How many units come in a pack, for items bought and counted by the case.
+    # A lounge counts beer in crates of 24 and spirits one bottle at a time;
+    # 1 means the item is simply counted individually.
+    stock_pack_size: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+    # Warn the owner at or below this level, in units.
     stock_threshold: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
     order_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(

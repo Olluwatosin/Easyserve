@@ -108,6 +108,7 @@ async def list_stock(db: AsyncSession, venue_id: str) -> list[dict]:
             "item_type": item.item_type,
             "price": float(item.price),
             "stock_quantity": qty,
+            "stock_pack_size": item.stock_pack_size or 1,
             "stock_threshold": item.stock_threshold,
             "is_low": qty <= item.stock_threshold,
             "is_out": qty == 0,

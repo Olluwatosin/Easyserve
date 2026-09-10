@@ -32,6 +32,8 @@ class MenuItemCreate(BaseModel):
     price: float
     image_url: str | None = None
     item_type: Literal["drink", "food", "other"] = "other"
+    stock_quantity: int | None = None
+    stock_pack_size: int = 1
     stock_threshold: int = 10
 
 
@@ -43,6 +45,8 @@ class MenuItemUpdate(BaseModel):
     image_url: str | None = None
     item_type: Literal["drink", "food", "other"] | None = None
     is_available: bool | None = None
+    stock_quantity: int | None = None
+    stock_pack_size: int | None = None
     stock_threshold: int | None = None
 
 
@@ -58,6 +62,8 @@ class MenuItemResponse(BaseModel):
     image_url: str | None
     item_type: str
     is_available: bool
+    stock_quantity: int | None = None
+    stock_pack_size: int = 1
     stock_threshold: int
     order_count: int
 
