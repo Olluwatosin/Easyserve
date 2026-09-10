@@ -253,13 +253,18 @@ h1, h2, h3, h4, h5, h6 {
  *
  * The auth screens and every staff display already sit on layered gradients;
  * the owner portal was the one flat surface in the app. This is the same visual
- * language — a teal wash from the top left, amber warmth from the bottom right,
- * and a vignette that settles the edges — pulled into one reusable layer.
+ * language — teal wash, amber warmth, a vignette settling the edges — pulled
+ * into one reusable layer.
  *
- * Kept deliberately faint. These screens are read for hours during service, and
- * a backdrop that competes with the numbers on it is a backdrop that makes the
- * product worse. It sits behind content, never intercepts a click, and holds
- * still while the page scrolls so long tables do not drag the light with them.
+ * Two layers, because a single gradient reads as a wash rather than a room:
+ * `::before` is the fixed atmosphere, `::after` carries soft lights that drift
+ * slowly across it. Strong enough to feel like a venue at night, still far
+ * enough back that a stock table stays readable for a whole shift — these
+ * screens are worked from, not looked at, and a backdrop that competes with the
+ * numbers makes the product worse.
+ *
+ * Both sit on a negative z-index and never intercept a click, and both are
+ * fixed rather than scrolled so a long table does not drag the light with it.
  */
 .ambient-night {
   position: relative;
@@ -270,56 +275,50 @@ h1, h2, h3, h4, h5, h6 {
   content: "";
   position: fixed;
   inset: 0;
-  z-index: -1;
+  z-index: -2;
   pointer-events: none;
   background:
-    radial-gradient(
-      ellipse 90% 60% at 12% 0%,
-      rgba(0, 212, 180, 0.13) 0%,
-      transparent 62%
-    ),
-    radial-gradient(
-      ellipse 70% 50% at 88% 100%,
-      rgba(255, 149, 0, 0.075) 0%,
-      transparent 58%
-    ),
-    radial-gradient(
-      ellipse 60% 45% at 78% 18%,
-      rgba(94, 129, 244, 0.05) 0%,
-      transparent 60%
-    ),
-    linear-gradient(168deg, #0E1B26 0%, #080D14 58%, #060A10 100%);
+    /* teal from the top left, the brand's own light */
+    radial-gradient(ellipse 95% 65% at 8% -8%, rgba(0, 212, 180, 0.26) 0%, transparent 60%),
+    /* amber warmth low and right, like lamps across a room */
+    radial-gradient(ellipse 75% 55% at 96% 104%, rgba(255, 149, 0, 0.15) 0%, transparent 58%),
+    /* a cool violet lift so the middle is not dead space */
+    radial-gradient(ellipse 65% 50% at 82% 12%, rgba(120, 110, 255, 0.11) 0%, transparent 62%),
+    /* a second teal, deeper, to give the field some depth */
+    radial-gradient(ellipse 50% 40% at 38% 88%, rgba(0, 168, 143, 0.10) 0%, transparent 65%),
+    linear-gradient(165deg, #10202E 0%, #0A1119 55%, #06090F 100%);
 }
 
-/* A slow drift, so the room feels alive rather than printed. Far too subtle to
- * notice directly, and switched off for anyone who asked for less motion. */
+/* Soft lights, drifting. Nothing you would look at directly — it just stops the
+ * room feeling printed. */
 .ambient-night::after {
   content: "";
   position: fixed;
-  inset: -20%;
+  inset: -25%;
   z-index: -1;
   pointer-events: none;
-  background: radial-gradient(
-    ellipse 40% 30% at 50% 50%,
-    rgba(0, 212, 180, 0.055) 0%,
-    transparent 70%
-  );
-  animation: ambient-drift 28s ease-in-out infinite alternate;
+  background:
+    radial-gradient(circle 26vmax at 22% 28%, rgba(0, 212, 180, 0.11) 0%, transparent 68%),
+    radial-gradient(circle 20vmax at 74% 62%, rgba(255, 149, 0, 0.075) 0%, transparent 70%),
+    radial-gradient(circle 16vmax at 52% 12%, rgba(150, 130, 255, 0.06) 0%, transparent 72%);
+  animation: ambient-drift 34s ease-in-out infinite alternate;
+  will-change: transform;
 }
 
 @keyframes ambient-drift {
-  from { transform: translate3d(-6%, -3%, 0) scale(1); }
-  to   { transform: translate3d(6%, 4%, 0) scale(1.12); }
+  from { transform: translate3d(-4%, -2.5%, 0) scale(1); }
+  to   { transform: translate3d(4%, 3%, 0) scale(1.14); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .ambient-night::after { animation: none; }
 }
 
-/* Cards need a touch of translucency for the backdrop to read through them,
- * otherwise the glow stops dead at every panel edge. */
+/* Panels take a translucent fill so the light carries through them. A glow that
+ * stops dead at every panel edge reads worse than no glow at all. */
 .ambient-night .card,
 .ambient-night .card-sm {
-  background-color: rgba(15, 25, 35, 0.72);
-  backdrop-filter: blur(10px);
+  background-color: rgba(15, 25, 35, 0.62);
+  backdrop-filter: blur(14px);
+  border-color: rgba(120, 160, 180, 0.14);
 }

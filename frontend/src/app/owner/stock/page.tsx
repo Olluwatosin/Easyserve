@@ -200,7 +200,7 @@ export default function StockPage() {
         <div
           className="rounded-2xl p-5 space-y-4"
           style={{
-            background: "rgba(17,24,39,0.66)", backdropFilter: "blur(10px)",
+            background: "rgba(15,25,35,0.58)", backdropFilter: "blur(14px)",
             border: `1px solid ${
               result.shrinkage_value > 0 ? "rgba(248,113,113,0.3)" : "rgba(0,212,180,0.3)"
             }`,
@@ -273,7 +273,7 @@ export default function StockPage() {
       {/* ── The list ────────────────────────────────────────────────────── */}
       <div
         className="rounded-2xl overflow-hidden"
-        style={{ background: "rgba(17,24,39,0.66)", backdropFilter: "blur(10px)", border: "1px solid #1E2D42" }}
+        style={{ background: "rgba(15,25,35,0.58)", backdropFilter: "blur(14px)", border: "1px solid rgba(120,160,180,0.16)" }}
       >
         {items.map((item, i) => (
           <div
@@ -350,7 +350,7 @@ export default function StockPage() {
                       : "Record one wasted or broken"
                   }
                   className="w-8 h-8 rounded-lg flex items-center justify-center"
-                  style={{ border: "1px solid #1E2D42", color: "var(--muted)" }}
+                  style={{ border: "1px solid rgba(120,160,180,0.16)", color: "var(--muted)" }}
                 >
                   <Minus size={14} />
                 </button>
@@ -370,7 +370,7 @@ export default function StockPage() {
                       : "Add one to stock"
                   }
                   className="w-8 h-8 rounded-lg flex items-center justify-center"
-                  style={{ border: "1px solid #1E2D42", color: "var(--muted)" }}
+                  style={{ border: "1px solid rgba(120,160,180,0.16)", color: "var(--muted)" }}
                 >
                   <Plus size={14} />
                 </button>
