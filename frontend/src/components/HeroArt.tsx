@@ -27,6 +27,8 @@
  * free for commercial use, no attribution required.
  */
 
+import { useState } from "react";
+
 import Image from "next/image";
 
 import { NightlifeScene } from "@/components/NightlifeScene";
@@ -49,10 +51,22 @@ export function HeroArt({
   sizes?: string;
   priority?: boolean;
 }) {
+  const [shown, setShown] = useState(false);
+
   return (
     <div className={`overflow-hidden ${className}`}>
-      {/* Fallback first, so it is already painted if the photo never arrives. */}
-      <NightlifeScene className="absolute inset-0 w-full h-full" />
+      {/* The fallback is painted until the photograph is actually up, then it
+          gets out of the way.
+
+          Leaving both mounted looked correct — the photo is the later sibling,
+          so it should paint on top — and it did not: the drawn scene covered a
+          fully loaded photograph, and every check said the image was fine
+          (complete, decoded, opaque, correct rect, on top by elementsFromPoint).
+          It only showed when the SVG was removed. So the fallback now unmounts
+          on load rather than relying on paint order, and the photo carries an
+          explicit z-index as well. Two reasons it cannot happen again, because
+          the first one was already supposed to be sufficient. */}
+      {!shown && <NightlifeScene className="absolute inset-0 w-full h-full" />}
       <Image
         src="/hero-bar.jpg"
         alt=""
@@ -62,7 +76,10 @@ export function HeroArt({
         quality={82}
         sizes={sizes}
         className="object-cover"
-        style={{ objectPosition: position }}
+        style={{ objectPosition: position, zIndex: 1 }}
+        onLoad={() => setShown(true)}
+        // If it fails, the drawn room stays exactly where it is.
+        onError={() => setShown(false)}
       />
     </div>
   );
