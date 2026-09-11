@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
-import { Check, Copy, Download, Plus, Printer, QrCode, Trash2, UserPlus, X } from "lucide-react";
+import { Check, ClipboardList, Copy, Download, Pencil, Plus, Printer, QrCode, Trash2, UserPlus, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import toast from "react-hot-toast";
 
@@ -30,6 +30,7 @@ export default function TablesPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [qrTable, setQrTable] = useState<Table | null>(null);
   const [form, setForm] = useState({ label: "", capacity: "", zone: "", minSpend: "" });
+  const [editTable, setEditTable] = useState<Table | null>(null);
 
   function load() {
     api.get("/tables").then((r) => setTables(r.data)).catch(() => {});
@@ -42,6 +43,24 @@ export default function TablesPage() {
   }
 
   useEffect(() => { load(); }, []);
+
+  /** Tables nobody is covering. The first question before doors open, and
+      until now it could only be answered by reading every card. */
+  const uncovered = useMemo(
+    () => tables.filter((t) => !(t.attendant_ids?.length || t.assigned_attendant_id)),
+    [tables],
+  );
+
+  /** Grouped the way the floor is actually laid out, so the screen reads like
+      the room rather than like a list. */
+  const byZone = useMemo(() => {
+    const groups: Record<string, Table[]> = {};
+    for (const t of tables) (groups[t.zone || "Unzoned"] ??= []).push(t);
+    for (const list of Object.values(groups)) {
+      list.sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
+    }
+    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  }, [tables]);
 
   function customerUrl(token: string) {
     if (typeof window === "undefined") return "";
@@ -62,6 +81,28 @@ export default function TablesPage() {
       load();
     } catch {
       toast.error("Failed to create table");
+    }
+  }
+
+  /** Rename / re-zone an existing table.
+
+      Tables were nameable only at creation, so a venue stuck with whatever was
+      typed on setup day — and the labels staff actually use on the floor drift
+      from those within a week. */
+  async function saveEdit() {
+    if (!editTable) return;
+    try {
+      await api.patch(`/tables/${editTable.id}`, {
+        label: editTable.label,
+        capacity: editTable.capacity,
+        zone: editTable.zone || null,
+        min_spend: Number(editTable.min_spend) || 0,
+      });
+      toast.success("Table updated");
+      setEditTable(null);
+      load();
+    } catch {
+      toast.error("Could not update table");
     }
   }
 
@@ -107,15 +148,34 @@ export default function TablesPage() {
         <div>
           <h1 className="font-display text-3xl font-bold text-text">Tables</h1>
           <p className="text-muted text-sm mt-1">
-            {tables.length} tables · assign attendants and share customer QR codes
+            {tables.length} tables
+            {uncovered.length > 0 ? (
+              <>
+                {" · "}
+                <span style={{ color: "var(--amber)" }}>
+                  {uncovered.length} with no attendant
+                </span>
+              </>
+            ) : (
+              " · every table has an attendant"
+            )}
           </p>
-          <a
-            href="/print/tables"
-            className="inline-flex items-center gap-1.5 mt-2 text-xs font-medium"
-            style={{ color: "var(--teal)" }}
-          >
-            <Printer size={13} /> Print all QR codes
-          </a>
+          <div className="flex items-center gap-4 mt-2">
+            <a
+              href="/print/shift"
+              className="inline-flex items-center gap-1.5 text-xs font-medium"
+              style={{ color: "var(--teal)" }}
+            >
+              <ClipboardList size={13} /> Shift sheet
+            </a>
+            <a
+              href="/print/tables"
+              className="inline-flex items-center gap-1.5 text-xs font-medium"
+              style={{ color: "var(--teal)" }}
+            >
+              <Printer size={13} /> Print all QR codes
+            </a>
+          </div>
         </div>
         <button onClick={() => setShowAdd(true)} className="btn-teal flex items-center gap-2">
           <Plus size={16} /> Add Table
@@ -177,16 +237,28 @@ export default function TablesPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {tables.map((table) => (
+      {byZone.map(([zone, zoneTables]) => (
+        <section key={zone} className="mb-8">
+          <div className="flex items-baseline gap-3 mb-3">
+            <h2 className="font-display text-lg font-semibold" style={{ color: "var(--text)" }}>
+              {zone}
+            </h2>
+            <span className="text-muted text-xs">
+              {zoneTables.length} {zoneTables.length === 1 ? "table" : "tables"}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {zoneTables.map((table) => (
           <div key={table.id} className="card">
             {/* ── Card header ── */}
             <div className="flex items-start justify-between mb-3">
               <div>
                 <p className="font-display font-bold text-text text-lg">{table.label}</p>
-                <div className="flex gap-2 mt-0.5">
-                  {table.zone && (
-                    <span className="badge-muted">{table.zone}</span>
+                <div className="flex gap-2 mt-0.5 flex-wrap">
+                  {/* The state that matters most on this screen, said on the
+                      card rather than inferred from an empty chip row below. */}
+                  {!(table.attendant_ids?.length || table.assigned_attendant_id) && (
+                    <span className="badge-amber">No attendant</span>
                   )}
                   {table.capacity && (
                     <span className="text-muted text-xs self-center">Seats {table.capacity}</span>
@@ -203,6 +275,16 @@ export default function TablesPage() {
                 </div>
               </div>
               <div className="flex gap-1">
+                <button
+                  onClick={() => setEditTable({ ...table })}
+                  className="p-2 rounded-lg transition-colors"
+                  style={{ color: "var(--muted)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--teal)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--muted)")}
+                  title="Rename or re-zone"
+                >
+                  <Pencil size={15} />
+                </button>
                 <button
                   onClick={() => setQrTable(table)}
                   className="p-2 rounded-lg transition-colors"
@@ -289,7 +371,102 @@ export default function TablesPage() {
             </div>
           </div>
         ))}
-      </div>
+          </div>
+        </section>
+      ))}
+
+      {/* ── Edit table ── */}
+      {editTable && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}
+          onClick={() => setEditTable(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-3xl p-7 animate-fade-in"
+            style={{
+              background: "#0E1820",
+              border: "1px solid #1E2D42",
+              boxShadow: "0 40px 100px rgba(0,0,0,0.7)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-5">
+              <p className="font-display font-bold text-lg" style={{ color: "var(--text)" }}>
+                Edit table
+              </p>
+              <button onClick={() => setEditTable(null)} style={{ color: "var(--muted)" }}>
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-text-soft text-sm mb-1.5">Name</label>
+                <input
+                  className="input"
+                  autoFocus
+                  value={editTable.label}
+                  onChange={(e) =>
+                    setEditTable((t) => (t ? { ...t, label: e.target.value } : t))
+                  }
+                  onKeyDown={(e) => e.key === "Enter" && editTable.label && saveEdit()}
+                />
+                <p className="text-xs mt-1.5" style={{ color: "var(--muted)" }}>
+                  Use whatever staff call it on the floor. The QR code keeps
+                  working — renaming does not reprint anything.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-text-soft text-sm mb-1.5">Zone</label>
+                  <input
+                    className="input"
+                    placeholder="VIP, Terrace…"
+                    value={editTable.zone ?? ""}
+                    onChange={(e) =>
+                      setEditTable((t) => (t ? { ...t, zone: e.target.value } : t))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-text-soft text-sm mb-1.5">Seats</label>
+                  <input
+                    className="input"
+                    type="number"
+                    value={editTable.capacity ?? ""}
+                    onChange={(e) =>
+                      setEditTable((t) =>
+                        t ? { ...t, capacity: e.target.value ? parseInt(e.target.value) : null } : t,
+                      )
+                    }
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-text-soft text-sm mb-1.5">Minimum spend (₦)</label>
+                <input
+                  className="input"
+                  type="number"
+                  value={String(editTable.min_spend ?? 0)}
+                  onChange={(e) =>
+                    setEditTable((t) => (t ? { ...t, min_spend: Number(e.target.value) } : t))
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button onClick={saveEdit} disabled={!editTable.label} className="btn-teal flex-1">
+                Save
+              </button>
+              <button onClick={() => setEditTable(null)} className="btn-outline">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── QR Modal ── */}
       {qrTable && (
