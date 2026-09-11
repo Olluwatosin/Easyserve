@@ -5,11 +5,29 @@ import { api } from "@/lib/api";
 import { Check, ClipboardList, Copy, Download, Pencil, Plus, Printer, QrCode, Trash2, UserPlus, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import toast from "react-hot-toast";
+import { useVenueChannel } from "@/lib/venueChannel";
+import { ITEM_STATUS_LABEL, isUnpaid, ORDER_STATUS_COLOR, ORDER_STATUS_LABEL } from "@/lib/orderStatus";
 
 interface StaffUser {
   id: string;
   full_name: string;
   role: string;
+}
+
+interface OrderItem {
+  id: string;
+  name: string;
+  quantity: number;
+  status: string;
+}
+
+interface Order {
+  id: string;
+  table_id: string | null;
+  status: string;
+  grand_total: number;
+  items: OrderItem[];
+  created_at: string;
 }
 
 interface Table {
@@ -31,9 +49,17 @@ export default function TablesPage() {
   const [qrTable, setQrTable] = useState<Table | null>(null);
   const [form, setForm] = useState({ label: "", capacity: "", zone: "", minSpend: "" });
   const [editTable, setEditTable] = useState<Table | null>(null);
+  const [detail, setDetail] = useState<Table | null>(null);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [venueId, setVenueId] = useState<string | null>(null);
+
+  function loadOrders() {
+    api.get("/orders").then((r) => setOrders(r.data)).catch(() => {});
+  }
 
   function load() {
     api.get("/tables").then((r) => setTables(r.data)).catch(() => {});
+    loadOrders();
     api
       .get("/staff")
       .then((r) =>
@@ -43,6 +69,26 @@ export default function TablesPage() {
   }
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    api.get("/venues/me").then((r) => setVenueId(r.data?.id ?? null)).catch(() => {});
+  }, []);
+
+  // The floor moves while this screen is open, and a stale "owed" figure is
+  // worse than none — it is the number someone decides to let a table leave on.
+  useVenueChannel(venueId, { onOrders: loadOrders });
+
+  /** What is actually running on each table right now. */
+  const liveByTable = useMemo(() => {
+    const map: Record<string, { open: Order[]; owed: number; since: string | null }> = {};
+    for (const o of orders) {
+      if (!o.table_id || !isUnpaid(o.status)) continue;
+      const e = (map[o.table_id] ??= { open: [], owed: 0, since: null });
+      e.open.push(o);
+      e.owed += Number(o.grand_total) || 0;
+      if (!e.since || o.created_at < e.since) e.since = o.created_at;
+    }
+    return map;
+  }, [orders]);
 
   /** Tables nobody is covering. The first question before doors open, and
       until now it could only be answered by reading every card. */
@@ -61,6 +107,14 @@ export default function TablesPage() {
     }
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
   }, [tables]);
+
+  /** How long this table has been running, in the words a floor uses. */
+  function since(iso: string | null): string {
+    if (!iso) return "";
+    const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+    if (mins < 60) return `${mins}m`;
+    return `${Math.floor(mins / 60)}h ${mins % 60}m`;
+  }
 
   function customerUrl(token: string) {
     if (typeof window === "undefined") return "";
@@ -308,6 +362,45 @@ export default function TablesPage() {
               </div>
             </div>
 
+            {/* ── What is running here right now ── */}
+            {(() => {
+              const live = liveByTable[table.id];
+              const open = live?.open.length ?? 0;
+              return (
+                <button
+                  onClick={() => setDetail(table)}
+                  className="w-full flex items-center justify-between gap-2 mb-3 px-3 py-2 rounded-xl text-left transition-colors"
+                  style={{
+                    background: open ? "rgba(255,179,71,0.07)" : "rgba(255,255,255,0.03)",
+                    border: `1px solid ${open ? "rgba(255,179,71,0.22)" : "rgba(255,255,255,0.07)"}`,
+                  }}
+                >
+                  {open ? (
+                    <>
+                      <span className="text-xs" style={{ color: "var(--text-soft)" }}>
+                        {open} open {open === 1 ? "order" : "orders"} · {since(live!.since)}
+                      </span>
+                      <span
+                        className="text-xs font-semibold tabular-nums"
+                        style={{ color: "var(--amber)" }}
+                      >
+                        ₦{live!.owed.toLocaleString()}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xs" style={{ color: "var(--muted)" }}>
+                        Nothing running
+                      </span>
+                      <span className="text-xs" style={{ color: "var(--muted)" }}>
+                        View
+                      </span>
+                    </>
+                  )}
+                </button>
+              );
+            })()}
+
             {/* ── Mini QR preview ── */}
             <div
               className="flex items-center gap-3 mb-4 p-2.5 rounded-xl cursor-pointer"
@@ -374,6 +467,153 @@ export default function TablesPage() {
           </div>
         </section>
       ))}
+
+      {/* ── One table, whole story ── */}
+      {detail && (() => {
+        const live = liveByTable[detail.id];
+        const names = (detail.attendant_ids ?? [])
+          .map((id) => staff.find((x) => x.id === id)?.full_name)
+          .filter(Boolean) as string[];
+        return (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ background: "rgba(0,0,0,0.75)", backdropFilter: "blur(8px)" }}
+            onClick={() => setDetail(null)}
+          >
+            <div
+              className="w-full max-w-md rounded-3xl p-7 animate-fade-in max-h-[85vh] overflow-y-auto"
+              style={{
+                background: "#0E1820",
+                border: "1px solid #1E2D42",
+                boxShadow: "0 40px 100px rgba(0,0,0,0.7)",
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-start justify-between mb-5">
+                <div>
+                  <p className="font-display font-bold text-xl" style={{ color: "var(--text)" }}>
+                    {detail.label}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>
+                    {[detail.zone, detail.capacity ? `${detail.capacity} seats` : null]
+                      .filter(Boolean)
+                      .join(" · ") || "No zone set"}
+                  </p>
+                </div>
+                <button onClick={() => setDetail(null)} style={{ color: "var(--muted)" }}>
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="mb-5">
+                <p className="text-xs mb-1.5" style={{ color: "var(--muted)" }}>
+                  Attendant
+                </p>
+                <p className="text-sm" style={{ color: names.length ? "var(--text)" : "var(--amber)" }}>
+                  {names.length ? names.join(", ") : "Nobody assigned"}
+                </p>
+              </div>
+
+              {live?.open.length ? (
+                <>
+                  <div
+                    className="flex items-center justify-between rounded-xl px-4 py-3 mb-4"
+                    style={{
+                      background: "rgba(255,179,71,0.08)",
+                      border: "1px solid rgba(255,179,71,0.25)",
+                    }}
+                  >
+                    <div>
+                      <p className="text-xs" style={{ color: "var(--muted)" }}>
+                        Owed
+                      </p>
+                      <p
+                        className="font-display font-bold text-2xl tabular-nums"
+                        style={{ color: "var(--amber)" }}
+                      >
+                        ₦{live.owed.toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs" style={{ color: "var(--muted)" }}>
+                        Running
+                      </p>
+                      <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
+                        {since(live.since)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {live.open.map((o) => (
+                      <div
+                        key={o.id}
+                        className="rounded-xl p-3"
+                        style={{ background: "rgba(255,255,255,0.03)", border: "1px solid #1E2D42" }}
+                      >
+                        <div className="flex items-center justify-between mb-2">
+                          <span
+                            className="text-xs font-semibold"
+                            style={{ color: ORDER_STATUS_COLOR[o.status] ?? "var(--muted)" }}
+                          >
+                            {ORDER_STATUS_LABEL[o.status] ?? o.status}
+                          </span>
+                          <span
+                            className="text-xs tabular-nums"
+                            style={{ color: "var(--text-soft)" }}
+                          >
+                            ₦{Number(o.grand_total).toLocaleString()}
+                          </span>
+                        </div>
+                        {o.items.map((it) => (
+                          <div
+                            key={it.id}
+                            className="flex items-center justify-between text-xs py-0.5"
+                          >
+                            <span style={{ color: "var(--text-soft)" }}>
+                              {it.quantity}× {it.name}
+                            </span>
+                            <span style={{ color: "var(--muted)" }}>
+                              {ITEM_STATUS_LABEL[it.status] ?? it.status}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <div
+                  className="rounded-xl px-4 py-6 text-center"
+                  style={{ background: "rgba(255,255,255,0.03)", border: "1px solid #1E2D42" }}
+                >
+                  <p className="text-sm" style={{ color: "var(--text-soft)" }}>
+                    Nothing running on this table
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
+                    No unpaid orders — it is clear for the next guests.
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => { setQrTable(detail); setDetail(null); }}
+                  className="btn-outline flex-1"
+                >
+                  Show QR
+                </button>
+                <button
+                  onClick={() => { setEditTable({ ...detail }); setDetail(null); }}
+                  className="btn-outline flex-1"
+                >
+                  Edit
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Edit table ── */}
       {editTable && (
