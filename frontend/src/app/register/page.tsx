@@ -62,7 +62,7 @@ export default function RegisterPage() {
     <main className="relative min-h-screen bg-bg overflow-hidden">
       {/* Same full-bleed treatment as sign-in — the two entry screens should
           feel like one room, not two. */}
-      <HeroArt className="fixed inset-0" position="62% 50%" sizes="100vw" priority />
+      <HeroArt className="fixed inset-0" position="62% 50%" />
 
       <div
         className="fixed inset-0 hidden lg:block"

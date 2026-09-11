@@ -73,7 +73,7 @@ export default function LoginPage() {
     <main className="relative min-h-screen bg-bg overflow-hidden">
       {/* One photograph behind the whole page — the card floats on it rather
           than sitting in a panel beside it. */}
-      <HeroArt className="fixed inset-0" position="62% 50%" sizes="100vw" priority />
+      <HeroArt className="fixed inset-0" position="62% 50%" />
 
       {/* The drink sits right of centre and the room falls away to the left, so
           the page darkens leftward where the type and the card live and stays
