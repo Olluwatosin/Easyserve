@@ -38,3 +38,6 @@ Thumbs.db
 
 # Generated deploy secrets — never commit
 render-secrets.local.txt
+
+# Throwaway local Postgres created by 'make db'
+.localdb/

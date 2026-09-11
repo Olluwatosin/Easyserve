@@ -47,19 +47,45 @@ docker compose exec backend python seed.py    # full demo venue
 - API docs — http://localhost:8000/docs
 - Health — http://localhost:8000/health
 
-### Without Docker
+### Without Docker — `make`
 
 ```bash
 uv sync                                       # workspace root
-cd backend && uv run alembic upgrade head
-uv run uvicorn app.main:app --reload
+cd frontend && npm install --legacy-peer-deps && cd ..
 
-cd frontend && npm install --legacy-peer-deps && npm run dev
+make db        # throwaway Postgres in .localdb, migrated and seeded
+make dev       # API :8000 + web :3000, hot reload
 ```
 
-You still need Postgres and Redis running somewhere; point `DATABASE_URL` and
-`REDIS_URL` at them. Redis is optional in development — the WebSocket manager
-falls back to single-instance mode and logs a warning.
+`make` is the recommended path, and not only for convenience — it closes two
+traps that each cost a working day:
+
+- **`make test` runs against its own database.** Tests create venues and staff,
+  and `seed.py` deletes every row in every table. A run once pointed at the live
+  demo database and left eleven test venues in it. The suite now refuses to
+  start unless the database is on this machine and named `test` or `*_test`
+  (`ALLOW_NONLOCAL_TEST_DB=1` overrides it, deliberately).
+- **`dev` and `preview` cannot run at once.** They shared one `.next` directory,
+  so `next dev` rewrote the build underneath `next start` and its chunks began
+  returning 503 — a blank page with no error anywhere. Every target stops the
+  others first, killing by *port*, because Next renames itself to `next-server`
+  and survives `pkill -f "next start"`.
+
+`make dev` and `make test` use separate databases (`easyserve_local` and
+`easyserve_test`), so running the suite never costs you a working demo.
+
+| | |
+|---|---|
+| `make db` | start the databases, migrate, load demo data |
+| `make dev` | full stack, hot reload |
+| `make preview` | full stack against a production build |
+| `make test` | backend suite, throwaway database |
+| `make seed` | reload demo data |
+| `make status` / `make stop` | what is running / put it all down |
+| `make reset` | delete the throwaway databases entirely |
+
+Redis is optional in development — the WebSocket manager falls back to
+single-instance mode and logs a warning.
 
 ---
 
@@ -163,6 +189,16 @@ Frontend — `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_WS_URL`. Both are baked in a
 ---
 
 ## Tests
+
+```bash
+make test
+```
+
+The suite will not run against a database that is not plainly disposable — see
+the quick start above for why, and `backend/tests/test_db_guard.py` for the
+cases that must stay refused.
+
+Running pytest directly still works, but you own the database choice:
 
 ```bash
 cd backend && uv run python -m pytest -v
