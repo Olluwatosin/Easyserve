@@ -7,10 +7,6 @@ import toast from "react-hot-toast";
 import { EsLogo } from "@/components/EsLogo";
 import { HeroArt } from "@/components/HeroArt";
 
-// Self-hosted gradient backdrop — no third-party image dependency at runtime.
-const HERO_BG =
-  "radial-gradient(ellipse at 25% 25%, rgba(255,149,0,0.12) 0%, transparent 55%), radial-gradient(ellipse at 80% 80%, rgba(0,212,180,0.14) 0%, transparent 50%), linear-gradient(160deg, #14202C 0%, #080D14 65%)";
-
 const FIELDS = [
   { key: "venue_name", label: "Venue Name", type: "text", placeholder: "The Grand Lounge" },
   { key: "full_name", label: "Your Full Name", type: "text", placeholder: "John Doe" },
@@ -63,124 +59,53 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="min-h-screen flex bg-bg overflow-hidden">
-      {/* ── Left hero panel (desktop only) ── */}
-      <div className="hidden lg:flex lg:w-[45%] relative flex-shrink-0">
-        {/* Narrower panel than login, so the crop holds further right to keep
-            the glass off the edge. */}
-        <HeroArt
-          className="absolute inset-0"
-          position="72% 55%"
-          sizes="(min-width: 1024px) 45vw, 100vw"
-          priority
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(255,149,0,0.12) 0%, transparent 42%)",
-          }}
-        />
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(0deg, rgba(8,13,20,0.94) 0%, rgba(8,13,20,0.45) 26%, rgba(8,13,20,0.05) 58%, transparent 100%)",
-          }}
-        />
+    <main className="relative min-h-screen bg-bg overflow-hidden">
+      {/* Same full-bleed treatment as sign-in — the two entry screens should
+          feel like one room, not two. */}
+      <HeroArt className="fixed inset-0" position="62% 50%" sizes="100vw" priority />
 
-        <div className="relative flex flex-col justify-between h-full p-12 z-10">
-          <div className="flex items-center gap-3">
-            <EsLogo size={40} variant="glass" />
-            <span className="font-display text-xl font-bold text-white">EasyServe</span>
-          </div>
+      <div
+        className="fixed inset-0 hidden lg:block"
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(8,13,20,0.95) 0%, rgba(8,13,20,0.86) 24%, rgba(8,13,20,0.5) 46%, rgba(8,13,20,0.14) 68%, rgba(8,13,20,0) 100%)",
+        }}
+      />
+      <div
+        className="fixed inset-0 lg:hidden"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(8,13,20,0.72) 0%, rgba(8,13,20,0.86) 100%)",
+        }}
+      />
+      <div
+        className="fixed inset-0"
+        style={{
+          background:
+            "linear-gradient(0deg, rgba(8,13,20,0.8) 0%, rgba(8,13,20,0.12) 28%, transparent 55%)",
+        }}
+      />
 
-          <div>
-            <p className="font-display text-[2.4rem] font-bold text-white leading-[1.15] mb-3">
-              Launch your venue<br />in minutes.
-            </p>
-            <p className="text-white/50 text-sm leading-relaxed max-w-xs">
-              Join hundreds of lounges across Africa using EasyServe to run smoother, serve faster, and earn more.
-            </p>
+      <div className="relative z-10 min-h-screen flex flex-col px-6 py-10 lg:px-16 lg:py-12">
+        <div className="flex items-center gap-3 justify-center lg:justify-start">
+          <EsLogo size={40} variant="glass" />
+          <span className="font-display text-xl font-bold text-white">EasyServe</span>
+        </div>
 
-            <div className="mt-8 space-y-3">
-              {[
-                "QR table ordering — no app needed",
-                "Live kitchen & bar display",
-                "Payments, exit passes & analytics",
-              ].map((point) => (
-                <div key={point} className="flex items-center gap-3">
-                  <div
-                    className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
-                    style={{ background: "rgba(0,212,180,0.2)" }}
-                  >
-                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                      <path
-                        d="M1 4L3.5 6.5L9 1"
-                        stroke="#00D4B4"
-                        strokeWidth="1.5"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </div>
-                  <span className="text-white/60 text-sm">{point}</span>
-                </div>
-              ))}
+        <div className="flex-1 flex items-center justify-center lg:justify-start py-8">
+          <div className="w-full max-w-[400px] animate-fade-in">
+
+            <div className="mb-7 text-center lg:text-left">
+              <h2
+                className="font-display text-3xl font-bold tracking-tight"
+                style={{ color: "var(--text)" }}
+              >
+                Create your venue
+              </h2>
+              <p className="text-sm mt-2" style={{ color: "var(--muted)" }}>
+                Get started with EasyServe in minutes
+              </p>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Right: form panel ── */}
-      <div className="flex-1 relative flex items-center justify-center px-6 py-10 overflow-hidden">
-        {/* Mobile background — heavier veil, the form sits straight on top. */}
-        <div className="absolute inset-0 lg:hidden overflow-hidden">
-          <HeroArt className="absolute inset-0" position="70% 50%" sizes="100vw" />
-          <div
-            className="absolute inset-0"
-            style={{ background: "rgba(8,13,20,0.82)" }}
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(180deg, rgba(8,13,20,0.55) 0%, rgba(8,13,20,0.88) 100%)",
-            }}
-          />
-        </div>
-
-        {/* Desktop: same backdrop continues from left panel */}
-        <div
-          className="hidden lg:block absolute inset-0"
-          style={{ background: HERO_BG }}
-        />
-        {/* Dark overlay so form stays readable */}
-        <div
-          className="hidden lg:block absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(8,13,20,0.80) 0%, rgba(8,13,20,0.65) 55%, rgba(8,13,20,0.78) 100%)",
-          }}
-        />
-
-        <div className="relative z-10 w-full max-w-[400px] animate-fade-in">
-          {/* Mobile logo */}
-          <div className="flex flex-col items-center mb-6 lg:hidden">
-            <EsLogo size={56} variant="glow-glass" className="mb-4" />
-          </div>
-
-          <div className="hidden lg:block mb-7">
-            <h2
-              className="font-display text-3xl font-bold tracking-tight"
-              style={{ color: "var(--text)" }}
-            >
-              Create your venue
-            </h2>
-            <p className="text-sm mt-2" style={{ color: "var(--muted)" }}>
-              Get started with EasyServe in minutes
-            </p>
-          </div>
 
           <form
             onSubmit={handleSubmit}
@@ -228,12 +153,46 @@ export default function RegisterPage() {
             </button>
           </form>
 
-          <p className="text-center text-xs mt-6" style={{ color: "var(--muted)" }}>
-            Already registered?{" "}
-            <a href="/login" className="text-teal hover:underline font-medium">
-              Sign in
-            </a>
+            <p className="text-center text-xs mt-6" style={{ color: "var(--muted)" }}>
+              Already registered?{" "}
+              <a href="/login" className="text-teal hover:underline font-medium">
+                Sign in
+              </a>
+            </p>
+          </div>
+        </div>
+
+        {/* Foot: what they get. Desktop only — the form is long enough on a
+            phone without it. */}
+        <div className="hidden lg:block">
+          <p className="font-display text-2xl font-bold text-white leading-tight mb-3">
+            Launch your venue in minutes.
           </p>
+          <div className="flex flex-wrap gap-x-8 gap-y-2">
+            {[
+              "QR table ordering — no app needed",
+              "Live kitchen & bar display",
+              "Payments, exit passes & analytics",
+            ].map((point) => (
+              <div key={point} className="flex items-center gap-2.5">
+                <div
+                  className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                  style={{ background: "rgba(0,212,180,0.2)" }}
+                >
+                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                    <path
+                      d="M1 4L3.5 6.5L9 1"
+                      stroke="#00D4B4"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+                <span className="text-white/60 text-sm">{point}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </main>

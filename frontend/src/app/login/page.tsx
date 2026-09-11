@@ -10,10 +10,6 @@ import { EsLogo } from "@/components/EsLogo";
 import { HeroArt } from "@/components/HeroArt";
 import { publicApi } from "@/lib/publicApi";
 
-// Self-hosted gradient backdrop — no third-party image dependency at runtime.
-const HERO_BG =
-  "radial-gradient(ellipse at 25% 25%, rgba(0,212,180,0.16) 0%, transparent 55%), radial-gradient(ellipse at 80% 80%, rgba(255,149,0,0.08) 0%, transparent 50%), linear-gradient(160deg, #10202F 0%, #080D14 65%)";
-
 const FEATURES = [
   { label: "Orders", value: "Managed live" },
   { label: "Payments", value: "Instant" },
@@ -74,121 +70,64 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen flex bg-bg overflow-hidden">
-      {/* ── Left hero panel (desktop only) ── */}
-      <div className="hidden lg:flex lg:w-[56%] relative flex-shrink-0">
-        <HeroArt className="absolute inset-0" priority />
-        {/* Only what the type needs, and no more — the photograph is the point.
-            A whisper of brand teal at the top-left where the wordmark sits… */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(0,212,180,0.14) 0%, transparent 42%)",
-          }}
-        />
-        {/* …and a foot dark enough to carry the tagline, released by mid-frame
-            so the glass and the ice keep their highlights. */}
-        <div
-          className="absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(0deg, rgba(8,13,20,0.94) 0%, rgba(8,13,20,0.45) 26%, rgba(8,13,20,0.05) 58%, transparent 100%)",
-          }}
-        />
+    <main className="relative min-h-screen bg-bg overflow-hidden">
+      {/* One photograph behind the whole page — the card floats on it rather
+          than sitting in a panel beside it. */}
+      <HeroArt className="fixed inset-0" position="62% 50%" sizes="100vw" priority />
 
-        {/* Content on image */}
-        <div className="relative flex flex-col justify-between h-full p-12 z-10">
-          {/* Top: wordmark */}
-          <div className="flex items-center gap-3">
-            <EsLogo size={40} variant="glass" />
-            <span className="font-display text-xl font-bold text-white">
-              EasyServe
-            </span>
-          </div>
+      {/* The drink sits right of centre and the room falls away to the left, so
+          the page darkens leftward where the type and the card live and stays
+          clear on the right where the glass is. The form's contrast comes from
+          the card itself, not from dimming the photograph — dimming it is what
+          made this page look flat to begin with. */}
+      <div
+        className="fixed inset-0 hidden lg:block"
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(8,13,20,0.95) 0%, rgba(8,13,20,0.86) 24%, rgba(8,13,20,0.5) 46%, rgba(8,13,20,0.14) 68%, rgba(8,13,20,0) 100%)",
+        }}
+      />
+      {/* A phone has no width for the room to fall away across, so it veils
+          evenly instead and leans darker — the card sits over the glass there
+          whatever we do. */}
+      <div
+        className="fixed inset-0 lg:hidden"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(8,13,20,0.72) 0%, rgba(8,13,20,0.86) 100%)",
+        }}
+      />
+      {/* A foot on every size, so the bottom row never floats on a bright bar. */}
+      <div
+        className="fixed inset-0"
+        style={{
+          background:
+            "linear-gradient(0deg, rgba(8,13,20,0.8) 0%, rgba(8,13,20,0.12) 28%, transparent 55%)",
+        }}
+      />
 
-          {/* Bottom: tagline + stats */}
-          <div>
-            <p className="font-display text-[2.6rem] font-bold text-white leading-[1.15] mb-3">
-              Where luxury<br />meets service.
-            </p>
-            <p className="text-white/50 text-sm leading-relaxed max-w-xs">
-              The all-in-one hospitality OS for Africa&apos;s finest nightlife venues.
-            </p>
+      <div className="relative z-10 min-h-screen flex flex-col px-6 py-10 lg:px-16 lg:py-12">
+        {/* Wordmark, now on every size — the split layout used to carry two. */}
+        <div className="flex items-center gap-3 justify-center lg:justify-start">
+          <EsLogo size={40} variant="glass" />
+          <span className="font-display text-xl font-bold text-white">
+            EasyServe
+          </span>
+        </div>
 
-            <div className="flex gap-8 mt-8">
-              {FEATURES.map(({ label, value }) => (
-                <div key={label}>
-                  <p className="text-white/35 text-xs uppercase tracking-wide">
-                    {label}
-                  </p>
-                  <p className="text-teal text-sm font-semibold mt-0.5">{value}</p>
-                </div>
-              ))}
+        <div className="flex-1 flex items-center justify-center lg:justify-start">
+          <div className="w-full max-w-[390px] animate-fade-in">
+            <div className="mb-7 text-center lg:text-left">
+              <h2
+                className="font-display text-3xl font-bold tracking-tight"
+                style={{ color: "var(--text)" }}
+              >
+                Welcome back
+              </h2>
+              <p className="text-sm mt-2" style={{ color: "var(--muted)" }}>
+                Sign in to your EasyServe account
+              </p>
             </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Right: form panel ── */}
-      <div className="flex-1 relative flex items-center justify-center px-6 py-12 overflow-hidden">
-        {/* Mobile: the same room, behind a heavier veil. The form sits directly
-            on top here rather than beside it, so this leans much darker than the
-            desktop panel — enough that the glass reads as depth, not as clutter
-            competing with the inputs. */}
-        <div className="absolute inset-0 lg:hidden overflow-hidden">
-          <HeroArt className="absolute inset-0" position="70% 50%" sizes="100vw" />
-          <div
-            className="absolute inset-0"
-            style={{ background: "rgba(8,13,20,0.82)" }}
-          />
-          <div
-            className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(180deg, rgba(8,13,20,0.55) 0%, rgba(8,13,20,0.88) 100%)",
-            }}
-          />
-        </div>
-
-        {/* Desktop: same backdrop continues from left panel */}
-        <div
-          className="hidden lg:block absolute inset-0"
-          style={{ background: HERO_BG }}
-        />
-        {/* Dark overlay so form stays readable */}
-        <div
-          className="hidden lg:block absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(135deg, rgba(8,13,20,0.80) 0%, rgba(8,13,20,0.65) 55%, rgba(8,13,20,0.78) 100%)",
-          }}
-        />
-
-        <div className="relative z-10 w-full max-w-[390px] animate-fade-in">
-          {/* Mobile-only logo */}
-          <div className="flex flex-col items-center mb-8 lg:hidden">
-            <EsLogo size={56} variant="glow-glass" className="mb-4" />
-            <h1
-              className="font-display text-2xl font-bold tracking-tight"
-              style={{ color: "var(--text)" }}
-            >
-              EasyServe
-            </h1>
-          </div>
-
-          {/* Desktop heading */}
-          <div className="hidden lg:block mb-8">
-            <h2
-              className="font-display text-3xl font-bold tracking-tight"
-              style={{ color: "var(--text)" }}
-            >
-              Welcome back
-            </h2>
-            <p className="text-sm mt-2" style={{ color: "var(--muted)" }}>
-              Sign in to your EasyServe account
-            </p>
-          </div>
 
           {/* Card */}
           <form
@@ -371,12 +310,34 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="text-center text-xs mt-6" style={{ color: "var(--muted)" }}>
-            New venue?{" "}
-            <a href="/register" className="text-teal hover:underline font-medium">
-              Register here
-            </a>
+            <p className="text-center text-xs mt-6" style={{ color: "var(--muted)" }}>
+              New venue?{" "}
+              <a href="/register" className="text-teal hover:underline font-medium">
+                Register here
+              </a>
+            </p>
+          </div>
+        </div>
+
+        {/* Foot: tagline and proof points. Desktop only — on a phone the card
+            already fills the screen and the photograph carries the mood alone. */}
+        <div className="hidden lg:block">
+          <p className="font-display text-2xl font-bold text-white leading-tight mb-1.5">
+            Where luxury meets service.
           </p>
+          <p className="text-white/45 text-sm max-w-sm">
+            The all-in-one hospitality OS for Africa&apos;s finest nightlife venues.
+          </p>
+          <div className="flex gap-8 mt-5">
+            {FEATURES.map(({ label, value }) => (
+              <div key={label}>
+                <p className="text-white/35 text-xs uppercase tracking-wide">
+                  {label}
+                </p>
+                <p className="text-teal text-sm font-semibold mt-0.5">{value}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </main>
