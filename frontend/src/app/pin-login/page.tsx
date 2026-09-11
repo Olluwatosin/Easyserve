@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { publicApi } from "@/lib/publicApi";
 import { getRoleHome } from "@/components/AuthGuard";
 import { Delete } from "lucide-react";
 import toast from "react-hot-toast";
@@ -21,9 +22,44 @@ const ROLES = [
 
 function PinLoginContent() {
   const [venue, setVenue] = useState("");
+  /** The venue's real name once resolved, so the screen can say where it is
+   *  signing in rather than showing a slug. */
+  const [venueName, setVenueName] = useState("");
+  const [venueBusy, setVenueBusy] = useState(false);
   const [pin, setPin] = useState("");
   const [step, setStep] = useState<"venue" | "pin">("venue");
   const params = useSearchParams();
+
+  /**
+   * Turn whatever was typed or remembered into a confirmed venue.
+   *
+   * This runs before a PIN is ever entered, and that is the whole point. A
+   * wrong venue and a wrong PIN come back from pin-login identically, so the
+   * keypad used to answer "Invalid PIN" when the venue was the problem — and
+   * staff would retype a PIN that was never wrong.
+   */
+  async function resolveVenue(input: string): Promise<boolean> {
+    const q = input.trim();
+    if (!q) return false;
+    setVenueBusy(true);
+    try {
+      const { data } = await publicApi.get(`/venues/lookup/${encodeURIComponent(q)}`);
+      setVenue(data.slug);
+      setVenueName(data.name);
+      setStep("pin");
+      return true;
+    } catch (err) {
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 404) {
+        toast.error("We don't recognise that venue — check the link your manager sent");
+      } else {
+        toast.error("Can't reach the server. Check your connection and try again.");
+      }
+      return false;
+    } finally {
+      setVenueBusy(false);
+    }
+  }
 
   // The venue comes from the link the manager shared, or from the last
   // successful sign-in on this device. Staff should not be typing a slug
@@ -32,10 +68,29 @@ function PinLoginContent() {
     const fromLink = params.get("venue")?.trim();
     const remembered = localStorage.getItem("venue_slug");
     const slug = fromLink || remembered;
-    if (slug) {
-      setVenue(slug);
-      setStep("pin");
-    }
+    if (!slug) return;
+    setVenue(slug);
+    // Confirm it still resolves. A remembered venue that has been renamed or
+    // deactivated would otherwise fail at the PIN step forever, blaming the
+    // PIN, with nothing on screen pointing at the real cause.
+    publicApi
+      .get(`/venues/lookup/${encodeURIComponent(slug)}`)
+      .then(({ data }) => {
+        setVenue(data.slug);
+        setVenueName(data.name);
+        setStep("pin");
+      })
+      .catch((err) => {
+        if ((err as { response?: { status?: number } })?.response?.status === 404) {
+          localStorage.removeItem("venue_slug");
+          setVenue("");
+          setStep("venue");
+        } else {
+          // Offline or server asleep — let them try the PIN anyway rather than
+          // blocking a shift on a lookup.
+          setStep("pin");
+        }
+      });
   }, [params]);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -64,8 +119,24 @@ function PinLoginContent() {
       localStorage.setItem("refresh_token", data.refresh_token);
       const payload = JSON.parse(atob(data.access_token.split(".")[1]));
       router.replace(getRoleHome(payload.role));
-    } catch {
-      toast.error("Invalid PIN — try again");
+    } catch (err) {
+      // Every failure used to read "Invalid PIN", including a sleeping server,
+      // a rate limit and the wrong venue. Staff retyped a correct PIN while the
+      // screen blamed them for something else entirely.
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401) {
+        toast.error(
+          venueName
+            ? `That PIN isn't recognised at ${venueName}`
+            : "That PIN isn't recognised here",
+        );
+      } else if (status === 429) {
+        toast.error("Too many tries — wait a minute, then try again");
+      } else if (status && status >= 500) {
+        toast.error("The server had a problem. Try again in a moment.");
+      } else {
+        toast.error("Can't reach the server. Check your connection and try again.");
+      }
       setPin("");
     } finally {
       setLoading(false);
@@ -151,7 +222,7 @@ function PinLoginContent() {
               How to sign in
             </p>
             {[
-              { n: "1", t: "Enter your venue ID", s: "Provided by your manager" },
+              { n: "1", t: "Enter your venue name", s: "Or open the link your manager sent" },
               { n: "2", t: "Type your 4-digit PIN", s: "Unique to your station role" },
             ].map((step) => (
               <div key={step.n} className="flex items-start gap-3">
@@ -249,12 +320,12 @@ function PinLoginContent() {
               className="font-display text-2xl font-bold"
               style={{ color: "var(--text)" }}
             >
-              {step === "venue" ? "Enter your venue ID" : "Enter your PIN"}
+              {step === "venue" ? "Which venue?" : "Enter your PIN"}
             </h1>
             <p className="mt-1.5 text-sm" style={{ color: "var(--muted)" }}>
               {step === "venue"
                 ? "Your manager provided this when setting up EasyServe"
-                : `Signing in to ${venue} — use your assigned station PIN`}
+                : `Signing in to ${venueName || venue} — use your assigned station PIN`}
             </p>
           </div>
 
@@ -282,7 +353,7 @@ function PinLoginContent() {
                   </label>
                   <input
                     className="input"
-                    placeholder="e.g. the-grand-noir"
+                    placeholder="e.g. The Grand Noir"
                     value={venue}
                     onChange={(e) =>
                       setVenue(e.target.value.toLowerCase().replace(/\s+/g, "-"))
@@ -290,7 +361,7 @@ function PinLoginContent() {
                     autoComplete="off"
                     autoCapitalize="none"
                     onKeyDown={(e) =>
-                      e.key === "Enter" && venue.trim() && setStep("pin")
+                      e.key === "Enter" && venue.trim() && resolveVenue(venue)
                     }
                   />
                   <p className="text-xs mt-1.5" style={{ color: "var(--muted)" }}>
@@ -298,8 +369,8 @@ function PinLoginContent() {
                   </p>
                 </div>
                 <button
-                  onClick={() => venue.trim() && setStep("pin")}
-                  disabled={!venue.trim()}
+                  onClick={() => venue.trim() && resolveVenue(venue)}
+                  disabled={!venue.trim() || venueBusy}
                   className="btn-teal w-full"
                 >
                   Continue →
@@ -343,7 +414,7 @@ function PinLoginContent() {
                       color: "var(--teal)",
                     }}
                   >
-                    {venue}
+                    {venueName || venue}
                   </span>
                   &nbsp; · change
                 </button>
