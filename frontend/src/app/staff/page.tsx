@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import {
   ITEM_STATUS_LABEL,
@@ -11,6 +11,7 @@ import {
 } from "@/lib/orderStatus";
 import { ConnectionBanner } from "@/lib/ws";
 import { useVenueChannel } from "@/lib/venueChannel";
+import { groupOpenByTable, runningFor, walkOrder, type TableLive } from "@/lib/tableLive";
 import { useAuthStore } from "@/stores/auth";
 import AuthGuard from "@/components/AuthGuard";
 import { formatNGN, timeAgo } from "@/lib/utils";
@@ -72,6 +73,7 @@ function StaffContent() {
   const [canTakePayment, setCanTakePayment] = useState(false);
   const [payingOrder, setPayingOrder] = useState<string | null>(null);
   const [soundOn, setSoundOn] = useState(true);
+  const [tableSheet, setTableSheet] = useState<string | null>(null);
   const [buzz, setBuzz] = useState<{
     message: string;
     type: "bar" | "kitchen";
@@ -222,6 +224,15 @@ function StaffContent() {
       Number(o.vat_amount ?? 0),
     0,
   );
+
+  // An attendant thinks in tables, not orders: one table can be three rounds
+  // and is always one decision. Sorted so the served-and-unpaid come first and
+  // then the longest-sitting — both ends of that are money leaving.
+  const floor = useMemo(
+    () => walkOrder(Object.values(groupOpenByTable(orders))),
+    [orders],
+  );
+  const openSheet: TableLive | undefined = floor.find((t) => t.tableId === tableSheet);
 
   const initials =
     user?.full_name
@@ -458,6 +469,55 @@ function StaffContent() {
           </section>
         )}
 
+        {/* ── My floor ── */}
+        {floor.length > 0 && (
+          <section className="mb-6">
+            <div className="flex items-center gap-2 mb-3">
+              <Clock size={14} className="text-teal" />
+              <p className="font-display font-bold text-sm" style={{ color: "var(--text)" }}>
+                My floor{" "}
+                <span style={{ color: "var(--muted)", fontWeight: 400 }}>
+                  ({floor.length} {floor.length === 1 ? "table" : "tables"})
+                </span>
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2.5">
+              {floor.map((t) => (
+                <button
+                  key={t.tableId}
+                  onClick={() => setTableSheet(t.tableId)}
+                  className="rounded-2xl px-3.5 py-3 text-left transition-transform active:scale-[0.98]"
+                  style={{
+                    background: t.needsPaying ? "rgba(255,179,71,0.08)" : "#111827",
+                    border: `1px solid ${t.needsPaying ? "rgba(255,179,71,0.3)" : "#1E2D42"}`,
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-display font-bold text-sm" style={{ color: "var(--text)" }}>
+                      {t.label ?? "Table"}
+                    </span>
+                    <span className="text-xs tabular-nums" style={{ color: "var(--muted)" }}>
+                      {runningFor(t.since)}
+                    </span>
+                  </div>
+                  <p
+                    className="font-display font-bold text-lg tabular-nums mt-0.5"
+                    style={{ color: t.needsPaying ? "var(--amber)" : "var(--text-soft)" }}
+                  >
+                    ₦{t.owed.toLocaleString()}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: t.needsPaying ? "var(--amber)" : "var(--muted)" }}>
+                    {t.needsPaying
+                      ? "Needs paying"
+                      : `${t.open.length} open ${t.open.length === 1 ? "order" : "orders"}`}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* ── Active Orders ── */}
         <section>
           <div className="flex items-center gap-2 mb-3">
@@ -650,6 +710,100 @@ function StaffContent() {
           )}
         </section>
       </div>
+
+      {/* ── One table, everything on it ──
+          A bottom sheet rather than a centred dialog: this is read one-handed,
+          standing up, on a phone. */}
+      {openSheet && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center sm:justify-center"
+          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(6px)" }}
+          onClick={() => setTableSheet(null)}
+        >
+          <div
+            className="w-full sm:max-w-md rounded-t-3xl sm:rounded-3xl p-5 pb-8 sm:pb-5 animate-fade-in max-h-[82vh] overflow-y-auto"
+            style={{ background: "#0E1820", border: "1px solid #1E2D42" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <p className="font-display font-bold text-xl" style={{ color: "var(--text)" }}>
+                  {openSheet.label ?? "Table"}
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>
+                  Running {runningFor(openSheet.since)} ·{" "}
+                  {openSheet.open.length} open{" "}
+                  {openSheet.open.length === 1 ? "order" : "orders"}
+                </p>
+              </div>
+              <button onClick={() => setTableSheet(null)} className="text-2xl leading-none" style={{ color: "var(--muted)" }}>
+                ×
+              </button>
+            </div>
+
+            <div
+              className="rounded-2xl px-4 py-3 mb-4"
+              style={{
+                background: openSheet.needsPaying ? "rgba(255,179,71,0.09)" : "rgba(255,255,255,0.03)",
+                border: `1px solid ${openSheet.needsPaying ? "rgba(255,179,71,0.28)" : "#1E2D42"}`,
+              }}
+            >
+              <p className="text-xs" style={{ color: "var(--muted)" }}>
+                {openSheet.needsPaying ? "Needs paying" : "Running total"}
+              </p>
+              <p
+                className="font-display font-bold text-3xl tabular-nums"
+                style={{ color: openSheet.needsPaying ? "var(--amber)" : "var(--text)" }}
+              >
+                ₦{openSheet.owed.toLocaleString()}
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {openSheet.open.map((o) => (
+                <div
+                  key={o.id}
+                  className="rounded-2xl p-3"
+                  style={{ background: "#111827", border: "1px solid #1E2D42" }}
+                >
+                  <p
+                    className="text-xs font-semibold mb-2"
+                    style={{ color: ORDER_STATUS_COLOR[o.status] ?? "var(--muted)" }}
+                  >
+                    {ORDER_STATUS_LABEL[o.status] ?? o.status}
+                  </p>
+                  {o.items.map((it) => (
+                    <div key={it.id} className="flex items-center justify-between gap-2 py-1">
+                      <span className="text-sm" style={{ color: "var(--text-soft)" }}>
+                        {it.quantity}× {it.name}
+                      </span>
+                      {it.status === "ready" ? (
+                        // The action this screen exists for, reachable from the
+                        // table rather than only from the order list.
+                        <button
+                          onClick={() => markDelivered(it.id)}
+                          className="text-xs font-bold px-3 py-1.5 rounded-xl flex-shrink-0"
+                          style={{
+                            background: "rgba(0,212,180,0.12)",
+                            border: "1px solid rgba(0,212,180,0.35)",
+                            color: "var(--teal)",
+                          }}
+                        >
+                          Served
+                        </button>
+                      ) : (
+                        <span className="text-xs flex-shrink-0" style={{ color: "var(--muted)" }}>
+                          {ITEM_STATUS_LABEL[it.status] ?? it.status}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -6,7 +6,8 @@ import { Check, ClipboardList, Copy, Download, Pencil, Plus, Printer, QrCode, Tr
 import { QRCodeSVG } from "qrcode.react";
 import toast from "react-hot-toast";
 import { useVenueChannel } from "@/lib/venueChannel";
-import { ITEM_STATUS_LABEL, isUnpaid, ORDER_STATUS_COLOR, ORDER_STATUS_LABEL } from "@/lib/orderStatus";
+import { ITEM_STATUS_LABEL, ORDER_STATUS_COLOR, ORDER_STATUS_LABEL } from "@/lib/orderStatus";
+import { groupOpenByTable, runningFor } from "@/lib/tableLive";
 
 interface StaffUser {
   id: string;
@@ -77,18 +78,10 @@ export default function TablesPage() {
   // worse than none — it is the number someone decides to let a table leave on.
   useVenueChannel(venueId, { onOrders: loadOrders });
 
-  /** What is actually running on each table right now. */
-  const liveByTable = useMemo(() => {
-    const map: Record<string, { open: Order[]; owed: number; since: string | null }> = {};
-    for (const o of orders) {
-      if (!o.table_id || !isUnpaid(o.status)) continue;
-      const e = (map[o.table_id] ??= { open: [], owed: 0, since: null });
-      e.open.push(o);
-      e.owed += Number(o.grand_total) || 0;
-      if (!e.since || o.created_at < e.since) e.since = o.created_at;
-    }
-    return map;
-  }, [orders]);
+  /** What is actually running on each table right now. Shared with the
+      attendant's floor view so the two can never disagree about what a table
+      owes. */
+  const liveByTable = useMemo(() => groupOpenByTable(orders), [orders]);
 
   /** Tables nobody is covering. The first question before doors open, and
       until now it could only be answered by reading every card. */
@@ -107,14 +100,6 @@ export default function TablesPage() {
     }
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
   }, [tables]);
-
-  /** How long this table has been running, in the words a floor uses. */
-  function since(iso: string | null): string {
-    if (!iso) return "";
-    const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
-    if (mins < 60) return `${mins}m`;
-    return `${Math.floor(mins / 60)}h ${mins % 60}m`;
-  }
 
   function customerUrl(token: string) {
     if (typeof window === "undefined") return "";
@@ -378,7 +363,7 @@ export default function TablesPage() {
                   {open ? (
                     <>
                       <span className="text-xs" style={{ color: "var(--text-soft)" }}>
-                        {open} open {open === 1 ? "order" : "orders"} · {since(live!.since)}
+                        {open} open {open === 1 ? "order" : "orders"} · {runningFor(live!.since)}
                       </span>
                       <span
                         className="text-xs font-semibold tabular-nums"
@@ -539,7 +524,7 @@ export default function TablesPage() {
                         Running
                       </p>
                       <p className="text-sm font-semibold" style={{ color: "var(--text)" }}>
-                        {since(live.since)}
+                        {runningFor(live.since)}
                       </p>
                     </div>
                   </div>
