@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/stores/auth";
+import { businessWeekday, greeting, isNight } from "@/lib/venueTime";
 import { formatNGN } from "@/lib/utils";
 import { TrendingUp, ShoppingBag, Armchair, AlertTriangle } from "lucide-react";
 import toast from "react-hot-toast";
@@ -56,23 +58,44 @@ function StatSkeleton() {
 
 export default function OwnerOverviewPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
+  const [venueName, setVenueName] = useState("");
+  const { user } = useAuthStore();
 
   useEffect(() => {
     api
       .get("/analytics/summary")
       .then((r) => setSummary(r.data))
       .catch(() => toast.error("Failed to load summary"));
+    api
+      .get("/venues/me")
+      .then((r) => setVenueName(r.data?.name ?? ""))
+      .catch(() => {});
   }, []);
+
+  // Computed on render rather than held in state: this page is opened, read and
+  // left, and a greeting that ticks over on a timer would be movement on a
+  // screen whose whole job is to sit still and be glanced at.
+  const firstName = user?.full_name?.split(" ")[0] ?? "";
+  const hello = firstName ? `${greeting()}, ${firstName}` : greeting();
+  const night = isNight();
 
   return (
     <div>
       {/* Page header */}
       <div className="mb-8">
         <h1 className="font-display text-3xl font-bold" style={{ color: "var(--text)" }}>
-          Overview
+          {hello}
         </h1>
         <p className="text-sm mt-1" style={{ color: "var(--muted)" }}>
-          Real-time venue snapshot
+          {venueName ? (
+            <>
+              {businessWeekday()}
+              {night ? " night" : ""} at{" "}
+              <span style={{ color: "var(--text-soft)" }}>{venueName}</span>
+            </>
+          ) : (
+            "Real-time venue snapshot"
+          )}
         </p>
       </div>
 
