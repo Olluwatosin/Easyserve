@@ -22,6 +22,10 @@ class MenuItem(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
     price: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    # What this costs the venue per unit. Null means "not known" rather than
+    # zero: a cocktail mixed to order has no single unit cost, and inventing one
+    # would quietly corrupt every margin figure derived from it.
+    unit_cost: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     image_url: Mapped[str | None] = mapped_column(Text)
     item_type: Mapped[str] = mapped_column(String(20), default="other", nullable=False)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

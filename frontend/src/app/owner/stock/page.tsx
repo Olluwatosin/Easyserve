@@ -7,6 +7,7 @@ import {
   Minus,
   Package,
   Plus,
+  Search,
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
@@ -19,6 +20,7 @@ interface StockItem {
   name: string;
   item_type: string;
   price: number;
+  unit_cost: number | null;
   stock_quantity: number;
   stock_pack_size: number;
   stock_threshold: number;
@@ -66,6 +68,17 @@ export default function StockPage() {
   const [packCounts, setPackCounts] = useState<Record<string, string>>({});
   const [result, setResult] = useState<CountResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [q, setQ] = useState("");
+  const [only, setOnly] = useState<"all" | "low" | "out">("all");
+
+  /** What the owner is actually looking at. A bar carries a hundred lines and
+      nobody scrolls one to find the gin. */
+  const visible = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return items
+      .filter((i) => !term || i.name.toLowerCase().includes(term))
+      .filter((i) => only === "all" || (only === "low" ? i.is_low : i.is_out));
+  }, [items, q, only]);
 
   async function load() {
     try {
@@ -270,12 +283,47 @@ export default function StockPage() {
         </div>
       )}
 
+      {/* ── Find it ─────────────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <div className="relative flex-1 min-w-[180px]">
+          <Search
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2"
+            style={{ color: "var(--muted)" }}
+          />
+          <input
+            className="input pl-9"
+            placeholder="Search stock"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+        {([
+          ["all", `All ${items.length}`],
+          ["low", `Running low ${items.filter((i) => i.is_low && !i.is_out).length}`],
+          ["out", `Out ${items.filter((i) => i.is_out).length}`],
+        ] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setOnly(key)}
+            className="px-3 py-2 rounded-lg text-xs font-medium whitespace-nowrap"
+            style={{
+              background: only === key ? "rgba(0,212,180,0.13)" : "rgba(255,255,255,0.03)",
+              border: `1px solid ${only === key ? "rgba(0,212,180,0.38)" : "#1E2D42"}`,
+              color: only === key ? "var(--teal)" : "var(--muted)",
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
       {/* ── The list ────────────────────────────────────────────────────── */}
       <div
         className="rounded-2xl overflow-hidden"
         style={{ background: "rgba(15,25,35,0.58)", backdropFilter: "blur(14px)", border: "1px solid rgba(120,160,180,0.16)" }}
       >
-        {items.map((item, i) => (
+        {visible.map((item, i) => (
           <div
             key={item.item_id}
             className="px-4 sm:px-5 py-3.5 flex items-center gap-3 flex-wrap"
@@ -291,7 +339,9 @@ export default function StockPage() {
             <div className="flex-1 min-w-[140px]">
               <p className="text-sm" style={{ color: "var(--text-soft)" }}>{item.name}</p>
               <p className="text-xs" style={{ color: "var(--muted)" }}>
-                {formatNGN(item.price)} · reorder at {item.stock_threshold}
+                {formatNGN(item.price)}
+                {item.unit_cost != null && ` · cost ${formatNGN(item.unit_cost)}`}
+                {" · reorder at "}{item.stock_threshold}
                 {item.stock_pack_size > 1 && ` · crate of ${item.stock_pack_size}`}
               </p>
             </div>

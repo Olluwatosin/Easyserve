@@ -9,7 +9,7 @@ import toast from "react-hot-toast";
 interface Category { id: string; name: string; sort_order: number; }
 interface MenuItem {
   id: string; category_id: string | null; name: string; description: string | null;
-  price: number; item_type: "drink" | "food" | "other"; is_available: boolean;
+  price: number; unit_cost: number | null; item_type: "drink" | "food" | "other"; is_available: boolean;
   order_count: number; image_url: string | null;
 }
 
@@ -28,7 +28,7 @@ export default function MenuPage() {
   const [showItemForm, setShowItemForm] = useState(false);
   const [editItem, setEditItem] = useState<MenuItem | null>(null);
   const [itemForm, setItemForm] = useState({
-    name: "", description: "", price: "",
+    name: "", description: "", price: "", unit_cost: "",
     item_type: "drink" as "drink" | "food" | "other",
     category_id: "", image_url: "",
   });
@@ -51,7 +51,7 @@ export default function MenuPage() {
 
   function openAddItem() {
     setEditItem(null);
-    setItemForm({ name: "", description: "", price: "", item_type: "drink", category_id: "", image_url: "" });
+    setItemForm({ name: "", description: "", price: "", unit_cost: "", item_type: "drink", category_id: "", image_url: "" });
     setShowItemForm(true);
     setShowCatForm(false);
   }
@@ -62,6 +62,7 @@ export default function MenuPage() {
       name: item.name,
       description: item.description ?? "",
       price: String(item.price),
+      unit_cost: item.unit_cost == null ? "" : String(item.unit_cost),
       item_type: item.item_type,
       category_id: item.category_id ?? "",
       image_url: item.image_url ?? "",
@@ -92,6 +93,9 @@ export default function MenuPage() {
       name: itemForm.name,
       description: itemForm.description || null,
       price: parseFloat(itemForm.price),
+      // Blank is "we don't know", not free. Sending 0 would report this line as
+      // pure margin and quietly drag every stock valuation down with it.
+      unit_cost: itemForm.unit_cost.trim() === "" ? null : parseFloat(itemForm.unit_cost),
       item_type: itemForm.item_type,
       category_id: itemForm.category_id || null,
       image_url: itemForm.image_url || null,
@@ -266,6 +270,29 @@ export default function MenuPage() {
                 onChange={(e) => setItemForm((f) => ({ ...f, price: e.target.value }))}
                 placeholder="e.g. 2500"
               />
+            </div>
+            <div>
+              <label className="block text-text-soft text-sm mb-1.5">
+                Cost to you (₦)
+              </label>
+              <input
+                className="input"
+                type="number"
+                value={itemForm.unit_cost}
+                onChange={(e) => setItemForm((f) => ({ ...f, unit_cost: e.target.value }))}
+                placeholder="what you pay for one"
+              />
+              <p className="text-xs mt-1.5" style={{ color: "var(--muted)" }}>
+                {(() => {
+                  const p = parseFloat(itemForm.price);
+                  const c = parseFloat(itemForm.unit_cost);
+                  if (!isFinite(p) || !isFinite(c) || p <= 0) {
+                    return "Optional — but without it, stock is valued at what it would sell for, not what it cost you.";
+                  }
+                  const pct = Math.round(((p - c) / p) * 1000) / 10;
+                  return `You keep ₦${(p - c).toLocaleString()} per unit — ${pct}% margin.`;
+                })()}
+              </p>
             </div>
             <div>
               <label className="block text-text-soft text-sm mb-1.5">Category</label>

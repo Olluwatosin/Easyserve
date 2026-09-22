@@ -102,17 +102,31 @@ async def list_stock(db: AsyncSession, venue_id: str) -> list[dict]:
     out = []
     for item in result.scalars().all():
         qty = item.stock_quantity or 0
+        cost = float(item.unit_cost) if item.unit_cost is not None else None
+        price = float(item.price)
         out.append({
             "item_id": item.id,
             "name": item.name,
             "item_type": item.item_type,
-            "price": float(item.price),
+            "price": price,
+            "unit_cost": cost,
             "stock_quantity": qty,
             "stock_pack_size": item.stock_pack_size or 1,
             "stock_threshold": item.stock_threshold,
             "is_low": qty <= item.stock_threshold,
             "is_out": qty == 0,
-            "value": round(qty * float(item.price), 2),
+            # Stock on hand is worth what it cost, not what it might sell for.
+            # Valuing it at the selling price overstates the shelf by the whole
+            # margin and makes shrinkage look larger than the money actually
+            # lost. None where the cost was never recorded — an unknown, said
+            # plainly, rather than a zero that silently drags a total down.
+            "value": round(qty * cost, 2) if cost is not None else None,
+            "margin": round(price - cost, 2) if cost is not None else None,
+            "margin_pct": (
+                round((price - cost) / price * 100, 1)
+                if cost is not None and price > 0
+                else None
+            ),
         })
     return out
 
@@ -215,8 +229,14 @@ async def get_variance(db: AsyncSession, venue_id: str, since: datetime | None =
         # Everything except the count itself is the movement the books know about.
         # Variance is whatever the count had to correct on top of that.
         variance = counted_delta
-        value = round(variance * float(item.price), 2)
-        if variance < 0:
+
+        # Missing stock is valued at what it cost the venue, not at what it
+        # would have sold for. A bottle that walks costs the owner its purchase
+        # price; counting the lost margin as well inflates shrinkage into a
+        # number nobody believes, and a number nobody believes gets ignored.
+        cost = float(item.unit_cost) if item.unit_cost is not None else None
+        value = round(variance * cost, 2) if cost is not None else None
+        if variance < 0 and value is not None:
             total_shrinkage_value = round(total_shrinkage_value + abs(value), 2)
 
         rows.append({
@@ -224,6 +244,7 @@ async def get_variance(db: AsyncSession, venue_id: str, since: datetime | None =
             "name": item.name,
             "item_type": item.item_type,
             "unit_price": float(item.price),
+            "unit_cost": cost,
             "sold": sold,
             "voided": voided,
             "restocked": restocked,
@@ -234,12 +255,21 @@ async def get_variance(db: AsyncSession, venue_id: str, since: datetime | None =
             "variance_value": value,
         })
 
+    # Shrinkage that could not be priced is reported separately rather than
+    # folded into the total as zero. "₦84,000 short, and 3 items we cannot
+    # value" is honest; a single total that quietly omits them is not.
+    unpriced = [r for r in rows if r["variance"] < 0 and r["variance_value"] is None]
+
     return {
         "period_start": period_start.isoformat() if period_start else None,
         "counted": bool(period_start),
         "items": rows,
         "discrepancies": [r for r in rows if r["variance"] != 0],
         "shrinkage_value": total_shrinkage_value,
+        "unpriced_shortfalls": [
+            {"item_id": r["item_id"], "name": r["name"], "variance": r["variance"]}
+            for r in unpriced
+        ],
     }
 
 

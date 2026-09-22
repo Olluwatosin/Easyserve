@@ -30,6 +30,9 @@ class MenuItemCreate(BaseModel):
     name: str
     description: str | None = None
     price: float
+    #: What it costs the venue. Optional — omitted means "not known", which the
+    #: reports show as unknown rather than quietly treating as free.
+    unit_cost: float | None = None
     image_url: str | None = None
     item_type: Literal["drink", "food", "other"] = "other"
     stock_quantity: int | None = None
@@ -39,6 +42,7 @@ class MenuItemCreate(BaseModel):
 
 class MenuItemUpdate(BaseModel):
     category_id: str | None = None
+    unit_cost: float | None = None
     name: str | None = None
     description: str | None = None
     price: float | None = None
@@ -57,6 +61,8 @@ class MenuItemResponse(BaseModel):
     name: str
     description: str | None
     price: float
+    #: Cost to the venue per unit. None means it was never recorded.
+    unit_cost: float | None = None
     original_price: float | None = None
     effective_price: float | None = None
     image_url: str | None
