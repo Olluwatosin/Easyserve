@@ -12,10 +12,11 @@ import {
 import { ConnectionBanner } from "@/lib/ws";
 import { useVenueChannel } from "@/lib/venueChannel";
 import { groupOpenByTable, runningFor, walkOrder, type TableLive } from "@/lib/tableLive";
+import { TakeOrderSheet } from "@/components/TakeOrderSheet";
 import { useAuthStore } from "@/stores/auth";
 import AuthGuard from "@/components/AuthGuard";
 import { formatNGN, timeAgo } from "@/lib/utils";
-import { Bell, BellRing, CheckCircle, ChefHat, Clock, LogOut, Wallet, Wine } from "lucide-react";
+import { Bell, BellRing, CheckCircle, ChefHat, Clock, LogOut, Plus, Wallet, Wine } from "lucide-react";
 import toast from "react-hot-toast";
 
 import {
@@ -74,6 +75,7 @@ function StaffContent() {
   const [payingOrder, setPayingOrder] = useState<string | null>(null);
   const [soundOn, setSoundOn] = useState(true);
   const [tableSheet, setTableSheet] = useState<string | null>(null);
+  const [taking, setTaking] = useState(false);
   const [buzz, setBuzz] = useState<{
     message: string;
     type: "bar" | "kitchen";
@@ -469,6 +471,16 @@ function StaffContent() {
           </section>
         )}
 
+        {/* Not tucked in a menu: a guest who will not scan is waiting while
+            this is found, and it is the most common thing an attendant does. */}
+        <button
+          onClick={() => setTaking(true)}
+          className="btn-teal w-full mb-6 flex items-center justify-center gap-2"
+          style={{ height: 50 }}
+        >
+          <Plus size={18} /> Take an order
+        </button>
+
         {/* ── My floor ── */}
         {floor.length > 0 && (
           <section className="mb-6">
@@ -710,6 +722,10 @@ function StaffContent() {
           )}
         </section>
       </div>
+
+      {taking && (
+        <TakeOrderSheet onClose={() => setTaking(false)} onPlaced={loadOrders} />
+      )}
 
       {/* ── One table, everything on it ──
           A bottom sheet rather than a centred dialog: this is read one-handed,

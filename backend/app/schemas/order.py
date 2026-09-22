@@ -20,6 +20,25 @@ class PlaceOrderRequest(BaseModel):
     customer_phone: str | None = None
 
 
+class StaffOrderRequest(BaseModel):
+    """An order taken at the table by a member of staff.
+
+    Plenty of guests will not scan — an older regular, a phone on 3%, a bottle
+    table who expect to be waited on, or someone who simply does not want to.
+    Before this, that guest could not be served through the system at all, which
+    meant their round was on paper and outside every total the venue relies on.
+
+    Addressed by table_id rather than the table's QR token: the attendant is
+    standing at the table, not reading the sticker on it.
+    """
+    table_id: str
+    items: list[OrderItemInput]
+    #: Set by the client so a double-tap, or a retry after a dropped network,
+    #: does not put the round on the bill twice.
+    client_request_id: str | None = None
+    customer_phone: str | None = None
+
+
 class OrderItemResponse(BaseModel):
     id: str
     menu_item_id: str | None

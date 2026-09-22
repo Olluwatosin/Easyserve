@@ -13,10 +13,16 @@ from app.models.table import Table
 from app.models.user import User
 from app.models.menu_item import MenuItem
 from app.models.venue import Venue
-from app.schemas.order import ItemStatusUpdate, OrderAssign, OrderResponse
+from app.schemas.order import (
+    ItemStatusUpdate,
+    OrderAssign,
+    OrderResponse,
+    PlaceOrderRequest,
+    StaffOrderRequest,
+)
 from app.services.audit_service import log_action
 from app.services import stock_service
-from app.services.order_service import apply_bill_charges
+from app.services.order_service import apply_bill_charges, place_order
 from app.services.routing_service import broadcast_item_ready
 from app.services.ws_manager import manager
 
@@ -67,6 +73,79 @@ async def list_orders(
             )
         ]
     return orders
+
+
+@router.post("", response_model=OrderResponse, status_code=201)
+async def place_staff_order(
+    req: StaffOrderRequest,
+    current_user: User = Depends(
+        require_roles("owner", "attendant", "cashier", "bartender")
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """Take an order for a guest who is not going to scan.
+
+    This is the same order as any other once it exists: it routes to the bar and
+    the kitchen, prices against the promotions running tonight, draws down stock
+    and appears on every live screen. That is deliberate — it goes through
+    `place_order`, the guest path, rather than a second implementation that
+    would eventually disagree with it about a happy-hour price or a stock level.
+
+    The table is addressed by id and looked up inside this venue, which is the
+    security boundary: staff cannot reach a table belonging to anyone else. The
+    QR token handed to `place_order` afterwards is just how that function
+    addresses a table, not a check being bypassed.
+
+    Kitchen and security are excluded. Neither takes orders at a table, and the
+    narrower the set of people who can add to a bill, the shorter the list of
+    people to ask when one is wrong.
+    """
+    result = await db.execute(
+        select(Table).where(
+            Table.id == req.table_id,
+            Table.venue_id == current_user.venue_id,
+            Table.is_active == True,
+        )
+    )
+    table = result.scalar_one_or_none()
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+
+    if not req.items:
+        raise HTTPException(status_code=400, detail="Add at least one item")
+
+    order = await place_order(
+        db,
+        table.qr_token,
+        PlaceOrderRequest(
+            items=req.items,
+            order_source="walk_in",
+            client_request_id=req.client_request_id,
+            customer_phone=req.customer_phone,
+        ),
+    )
+
+    # Whoever keyed it in owns it, even on a table with no attendant assigned —
+    # otherwise a walk-in round belongs to nobody in the night's report.
+    if order.assigned_to is None:
+        order.assigned_to = current_user.id
+
+    log_action(
+        db,
+        venue_id=current_user.venue_id,
+        actor_id=current_user.id,
+        action="order_taken_at_table",
+        entity_type="order",
+        entity_id=order.id,
+        details={"table": table.label, "items": len(req.items)},
+    )
+    await db.commit()
+
+    # Re-read rather than return the instance: the commit above expired it, and
+    # the response body needs its items — which would otherwise be a lazy load
+    # in the wrong place.
+    reread = await db.execute(_order_query().where(Order.id == order.id))
+    return reread.scalar_one()
 
 
 @router.get("/{order_id}", response_model=OrderResponse)
