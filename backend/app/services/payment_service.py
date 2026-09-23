@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.models.order import Order
+from app.config import settings
 from app.models.payment import Payment
 from app.utils.venue_time import business_date
 from app.models.exit_pass import ExitPass
@@ -151,11 +152,16 @@ async def initiate_gateway_payment(
     db.add(payment)
     await db.commit()
 
+    # Back to this guest's own bill, where the exit pass appears once the
+    # webhook lands. Trailing slash stripped so the URL cannot end up doubled.
+    callback = f"{settings.FRONTEND_URL.rstrip('/')}/bill/{session_token}"
+
     authorization_url = await paystack_service.initialize_transaction(
         email=email or f"guest+{reference}@easyserve.ng",
         amount_kobo=int(round(amount_due * 100)),
         reference=reference,
         metadata={"order_id": order.id, "venue_id": order.venue_id},
+        callback_url=callback,
     )
     return {"authorization_url": authorization_url, "reference": reference, "amount": amount_due}
 

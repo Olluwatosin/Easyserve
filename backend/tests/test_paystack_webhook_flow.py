@@ -270,3 +270,36 @@ async def test_the_guest_is_only_offered_online_payment_when_it_works(client, mo
     monkeypatch.setattr(settings, "PAYSTACK_SECRET_KEY", "")
     off = await client.get(f"/api/v1/customer/pay-options/{token}")
     assert off.json()["online"] is False
+
+
+async def test_the_guest_is_sent_back_to_their_own_bill(client, monkeypatch):
+    """Where Paystack returns the guest's browser.
+
+    A single callback URL in the dashboard cannot know which bill to return to,
+    so it is sent per transaction. Without it the guest lands on a generic page
+    and has to find their way back to the table they are sitting at — holding a
+    phone that does not yet show the exit pass they just paid for.
+    """
+    from app.config import settings
+    from app.services import paystack_service
+
+    seen: dict = {}
+
+    async def fake_initialize(**kwargs):
+        seen.update(kwargs)
+        return "https://checkout.paystack.com/fake"
+
+    monkeypatch.setattr(settings, "FRONTEND_URL", "https://easyserve-pi.vercel.app/")
+    monkeypatch.setattr(paystack_service, "initialize_transaction", fake_initialize)
+
+    _, order, _ = await _unpaid_order_with_pending_payment(client)
+    token = order["session_token"]
+
+    r = await client.post(
+        f"/api/v1/customer/pay/{token}", json={"order_id": order["id"]}
+    )
+    assert r.status_code == 200, r.text
+
+    assert seen["callback_url"] == f"https://easyserve-pi.vercel.app/bill/{token}", (
+        "the guest must come back to their own bill, not a generic page"
+    )

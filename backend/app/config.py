@@ -22,7 +22,9 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     ALLOWED_ORIGINS: str = "http://localhost:3000"
     # Public base URL of the customer-facing frontend — printed into table QR codes.
-    FRONTEND_URL: str = "http://localhost:3001"
+    # Where a guest is sent back to after paying. Must be the public web
+# address in production — a guest redirected to localhost sees nothing.
+    FRONTEND_URL: str = "http://localhost:3000"
     # Paystack pay-by-transfer. Empty key = feature disabled (endpoints return 503).
     PAYSTACK_SECRET_KEY: str = ""
     # Optional Sentry error tracking (no-op when empty).

@@ -37,8 +37,19 @@ async def initialize_transaction(
     amount_kobo: int,
     reference: str,
     metadata: dict | None = None,
+    callback_url: str | None = None,
 ) -> str:
-    """Create a Paystack checkout and return its authorization URL."""
+    """Create a Paystack checkout and return its authorization URL.
+
+    `callback_url` is where Paystack sends the guest's *browser* afterwards, and
+    it is passed per transaction rather than configured once in the dashboard —
+    a single dashboard URL cannot know which guest's bill to return to, so the
+    guest would land on a generic page and have to find their way back to the
+    table they are sitting at.
+
+    It is not how payment is confirmed. That is the webhook, server to server
+    and signed; this only decides where somebody's phone goes next.
+    """
     if not is_enabled():
         raise HTTPException(status_code=503, detail="Online payment is not configured for this venue")
     async with httpx.AsyncClient(timeout=15) as client:
@@ -52,6 +63,7 @@ async def initialize_transaction(
                 "currency": "NGN",
                 "channels": ["card", "bank_transfer", "ussd"],
                 "metadata": metadata or {},
+                **({"callback_url": callback_url} if callback_url else {}),
             },
         )
     if resp.status_code != 200:
