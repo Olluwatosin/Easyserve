@@ -50,6 +50,7 @@ interface OrderData {
 
 interface ExitPass {
   token: string;
+  short_code: string | null;
   status: "valid" | "expired" | "used";
   expires_at: string;
 }
@@ -491,11 +492,34 @@ export default function BillPage({
                     level="M"
                   />
                 </div>
+                {/* The typable half. A camera fails on a cracked screen, at a
+                    low brightness, or in the glare of a door light — and then
+                    the guest is arguing with security instead of leaving. */}
+                {exitPass.short_code && (
+                  <div className="flex flex-col items-center gap-1">
+                    <p
+                      className="text-xs uppercase tracking-widest"
+                      style={{ color: "var(--muted)" }}
+                    >
+                      or read this out
+                    </p>
+                    <p
+                      className="font-display font-bold tabular-nums"
+                      style={{
+                        fontSize: 34,
+                        letterSpacing: "0.22em",
+                        color: "var(--teal)",
+                      }}
+                    >
+                      {exitPass.short_code}
+                    </p>
+                  </div>
+                )}
                 <p
                   className="text-xs text-center"
                   style={{ color: "var(--muted)" }}
                 >
-                  Present this QR code to security at the exit
+                  Show the code to security on your way out
                 </p>
               </div>
             )}

@@ -300,14 +300,26 @@ function SecurityContent() {
                 className="text-center text-xs mb-3"
                 style={{ color: "var(--muted)" }}
               >
-                — or enter token manually —
+                — or type the guest&apos;s code —
               </p>
               <div className="flex gap-2">
+                {/* Built for the 6-character code, which is what a person will
+                    actually be typing. The long token still pastes and works,
+                    so nothing that used to is lost. */}
                 <input
-                  className="input flex-1"
-                  placeholder="Paste exit pass token…"
+                  className="input flex-1 text-center"
+                  style={{ fontSize: 24, letterSpacing: "0.25em", fontWeight: 700, height: 56 }}
+                  placeholder="A2C4E6"
                   value={manualToken}
-                  onChange={(e) => setManualToken(e.target.value)}
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  maxLength={160}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    // A pasted token keeps its punctuation; anything short is
+                    // somebody typing a code, so it is upper-cased for them.
+                    setManualToken(v.length <= 12 ? v.toUpperCase().replace(/[^A-Z0-9]/g, "") : v);
+                  }}
                   onKeyDown={(e) =>
                     e.key === "Enter" && processToken(manualToken)
                   }

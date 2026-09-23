@@ -255,11 +255,16 @@ async def _create_exit_pass(db: AsyncSession, order: Order) -> ExitPass:
     token = generate_exit_pass_token(order.id, order.venue_id)
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=minutes)
 
+    from app.services.exit_pass_service import generate_short_code
+
     exit_pass = ExitPass(
         id=str(uuid.uuid4()),
         order_id=order.id,
         venue_id=order.venue_id,
         token=token,
+        # The typable half. The QR carries the token; the door types this when
+        # the camera will not read a cracked screen at 2am.
+        short_code=await generate_short_code(db, order.venue_id),
         expires_at=expires_at,
     )
     db.add(exit_pass)

@@ -20,6 +20,10 @@ class ExitPass(Base):
         String(36), ForeignKey("venues.id", ondelete="CASCADE"), nullable=False
     )
     token: Mapped[str] = mapped_column(String(512), unique=True, nullable=False)
+    # The typable half of the pass. The token above goes in the QR; this is what
+    # the door types when the camera will not read it. Nullable only because
+    # passes issued before this existed have none.
+    short_code: Mapped[str | None] = mapped_column(String(12), nullable=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     scanned_by: Mapped[str | None] = mapped_column(

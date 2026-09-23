@@ -229,6 +229,9 @@ async def get_customer_exit_pass(session_token: str, db: AsyncSession = Depends(
     _, ep = row
     return {
         "token": ep.token,
+        # Shown under the QR so the door can type it when the camera will not
+        # read the screen. Same pass, same single use, same expiry.
+        "short_code": ep.short_code,
         "status": ep.status,
         "expires_at": ep.expires_at.isoformat(),
         "used_at": ep.used_at.isoformat() if ep.used_at else None,
