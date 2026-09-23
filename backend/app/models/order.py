@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, func
+from sqlalchemy import Integer, Date, DateTime, ForeignKey, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -36,6 +36,10 @@ class Order(Base):
     # recomputed later. A venue's rollover hour is about to become a setting,
     # and query-time arithmetic would let changing it rewrite every past report.
     business_date: Mapped[date] = mapped_column(Date, nullable=False)
+    # How many people were actually at the table. Capacity is the furniture;
+    # this is the party. Null means nobody asked — not a table of none, which
+    # would drag every spend-per-head figure downwards.
+    covers: Mapped[int | None] = mapped_column(Integer, nullable=True)
     total_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False)
     customer_phone: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     # Snapshots computed from the venue's percentages when the order changes,

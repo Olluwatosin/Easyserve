@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.dependencies import require_roles, require_plan
+from app.dependencies import require_roles, require_plan, require_feature
 from app.models.user import User
 from app.services import analytics_service
 
@@ -27,7 +27,7 @@ async def summary(
 
 @router.get("/peak-hours")
 async def peak_hours(
-    current_user: User = Depends(require_plan("growth", "pro", "enterprise")),
+    current_user: User = Depends(require_feature("analytics.advanced")),
     db: AsyncSession = Depends(get_db),
 ):
     return await analytics_service.get_peak_hours(db, current_user.venue_id)
@@ -35,7 +35,7 @@ async def peak_hours(
 
 @router.get("/top-items")
 async def top_items(
-    current_user: User = Depends(require_plan("growth", "pro", "enterprise")),
+    current_user: User = Depends(require_feature("analytics.advanced")),
     db: AsyncSession = Depends(get_db),
 ):
     return await analytics_service.get_top_items(db, current_user.venue_id)
@@ -51,7 +51,7 @@ async def slow_tables(
 
 @router.get("/staff-scores")
 async def staff_scores(
-    current_user: User = Depends(require_plan("growth", "pro", "enterprise")),
+    current_user: User = Depends(require_feature("analytics.advanced")),
     db: AsyncSession = Depends(get_db),
 ):
     return await analytics_service.get_staff_scores(db, current_user.venue_id)

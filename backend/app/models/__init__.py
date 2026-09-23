@@ -20,3 +20,4 @@ __all__ = [
     "Alert", "Feedback", "AuditLog", "PasswordResetToken", "StockMovement",
 ]
 from app.models.shift import Shift  # noqa: F401
+from app.models.venue_night import VenueNight  # noqa: F401

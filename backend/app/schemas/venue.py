@@ -10,6 +10,8 @@ class VenueResponse(BaseModel):
     city: str | None
     phone: str | None
     plan: str
+    #: Capabilities this venue may use — see app/entitlements.py.
+    features: list[str] = []
     is_active: bool
     exit_pass_minutes: int
     drink_prep_minutes: int = 5

@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import Boolean, DateTime, Numeric, String, Text, func
+from sqlalchemy import JSON, Boolean, DateTime, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -38,6 +38,11 @@ class Venue(Base):
     # needs it, so clocking in means being somewhere the code is — a PIN alone
     # proves only that somebody knows a PIN.
     clock_in_code: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    # Capabilities this venue has on top of its plan. Pilots run free and need
+    # premium modules without inventing a tier that has to be un-invented at the
+    # first invoice — and it is how a module ships dark, switched on one venue
+    # at a time.
+    extra_features: Mapped[list | None] = mapped_column(JSON, nullable=True)
     # What the guest is told to expect once a station accepts their item.
     # A promise, not a measurement — set them to what the venue can actually
     # hit on a busy night, because a countdown that expires while someone is

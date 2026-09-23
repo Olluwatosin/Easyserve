@@ -71,3 +71,45 @@ def require_plan(*plans: str, roles: tuple[str, ...] = ("owner",)):
             )
         return current_user
     return _check
+
+
+def require_feature(feature: str, roles: tuple[str, ...] = ("owner",)):
+    """Gate on a capability rather than on a plan's name.
+
+    Naming plans at the call site turned a commercial decision into a search
+    through the codebase — and the kind of search where missing one leaves a
+    paying venue locked out of something it bought. Call sites now name what
+    they need; app/entitlements.py decides who has it.
+
+    Role is still checked here for the same reason `require_plan` checks it: a
+    plan is a billing question, not an authorisation one, and gating on plan
+    alone once let any signed-in user at a Growth venue read owner analytics.
+    """
+    async def _check(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> User:
+        from app.entitlements import has_feature
+        from app.models.venue import Venue
+
+        if current_user.role not in roles:
+            raise HTTPException(
+                status_code=403, detail="Your role does not have access to this"
+            )
+
+        venue = (
+            await db.execute(select(Venue).where(Venue.id == current_user.venue_id))
+        ).scalar_one_or_none()
+        if venue is None:
+            raise HTTPException(status_code=404, detail="Venue not found")
+
+        if not has_feature(venue.plan, feature, venue.extra_features):
+            # 402 rather than 403: this is not "you may not", it is "this is not
+            # part of your plan", and the two want different answers in the UI.
+            raise HTTPException(
+                status_code=402,
+                detail=f"{feature} is not included in your plan",
+            )
+        return current_user
+
+    return _check

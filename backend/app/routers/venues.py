@@ -13,8 +13,19 @@ router = APIRouter(prefix="/venues", tags=["venues"])
 
 @router.get("/me", response_model=VenueResponse)
 async def get_venue(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """This venue, including what it is entitled to use.
+
+    The features travel with the venue because the app has to be able to hide a
+    module it cannot use. Without this the only way to discover a locked feature
+    is to press it and be refused, which reads as a broken button rather than as
+    something to buy.
+    """
+    from app.entitlements import features_for
+
     result = await db.execute(select(Venue).where(Venue.id == current_user.venue_id))
-    return result.scalar_one()
+    venue = result.scalar_one()
+    venue.features = sorted(features_for(venue.plan, venue.extra_features))
+    return venue
 
 
 @router.patch("/me", response_model=VenueResponse)
