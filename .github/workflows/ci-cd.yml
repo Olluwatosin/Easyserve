@@ -60,6 +60,16 @@ jobs:
         run: uv run python -m pytest -v
         working-directory: backend
 
+      # The demo reset wipes every row and then re-seeds, so a seed that fails
+      # does not leave the old data — it leaves nothing. A NOT NULL column added
+      # in a migration broke seed.py and took the public demo down, with the
+      # tests all green, because nothing ever ran it. Now something does.
+      - name: Seed must work
+        run: |
+          uv run alembic upgrade head
+          uv run python seed.py
+        working-directory: backend
+
   # ── Frontend ───────────────────────────────────────────────────────────────
   frontend:
     name: Frontend — lint & build

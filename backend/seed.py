@@ -40,6 +40,7 @@ from app.models.menu_category import MenuCategory
 from app.models.promo import Promo
 from app.models.menu_item import MenuItem
 from app.models.order import Order
+from app.utils.venue_time import business_date
 from app.models.order_item import OrderItem
 from app.models.payment import Payment
 from app.models.exit_pass import ExitPass
@@ -315,6 +316,10 @@ async def seed():
                 status=status,
                 order_source="qr_scan",
                 total_amount=total,
+                # Stamped, like every real order. The caller sets created_at
+                # afterwards and corrects this to match — a seeded night that
+                # lands on the wrong business date reports as the wrong night.
+                business_date=business_date(),
             )
             # Caller sets created_at; the spread across the evening is the
             # whole point of the seed.
@@ -388,6 +393,9 @@ async def seed():
         for table_label, when, spec, item_status, order_status in NIGHT:
             oid, sess, total, order = make_order(table_label, spec, order_status)
             order.created_at = at(when)
+            # The night follows the time the order was actually given, not the
+            # moment the seed ran. A 1am round belongs to the evening before.
+            order.business_date = business_date(order.created_at)
             order.updated_at = at(min(1.0, when + 0.02))
             order_times[oid] = order.created_at
             db.add(order)
@@ -431,6 +439,7 @@ async def seed():
                 provider_ref=reference if provider else None,
                 transfer_reference=reference if verification == "manual" else None,
                 recorded_by=None if verification == "gateway" else staff_ids.get("cashier"),
+                business_date=business_date(paid_at + timedelta(minutes=6)),
             )
             # A payment lands minutes after the table finished, not at reset time.
             payment.created_at = paid_at + timedelta(minutes=6)
