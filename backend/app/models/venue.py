@@ -34,6 +34,10 @@ class Venue(Base):
         Boolean, default=False, nullable=False
     )
     exit_pass_minutes: Mapped[int] = mapped_column(default=10, nullable=False)
+    # Displayed behind the bar and on the printed shift sheet. Starting a shift
+    # needs it, so clocking in means being somewhere the code is — a PIN alone
+    # proves only that somebody knows a PIN.
+    clock_in_code: Mapped[str | None] = mapped_column(String(12), nullable=True)
     # What the guest is told to expect once a station accepts their item.
     # A promise, not a measurement — set them to what the venue can actually
     # hit on a busy night, because a countdown that expires while someone is

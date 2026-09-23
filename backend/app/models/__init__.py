@@ -19,3 +19,4 @@ __all__ = [
     "Promo", "Order", "OrderItem", "Payment", "ExitPass",
     "Alert", "Feedback", "AuditLog", "PasswordResetToken", "StockMovement",
 ]
+from app.models.shift import Shift  # noqa: F401

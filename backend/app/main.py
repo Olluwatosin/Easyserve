@@ -31,6 +31,7 @@ if settings.SENTRY_DSN:
         logging.getLogger(__name__).warning("SENTRY_DSN set but sentry-sdk not installed")
 from app.utils.limiter import limiter
 from app.routers import (
+    shifts,
     auth,
     venues,
     tables,
@@ -88,6 +89,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api/v1")
+app.include_router(shifts.router, prefix="/api/v1")
 app.include_router(venues.router, prefix="/api/v1")
 app.include_router(tables.router, prefix="/api/v1")
 app.include_router(menu.router, prefix="/api/v1")
