@@ -116,8 +116,11 @@ class ImportedItem(BaseModel):
     unit_cost: float | None = None
     category: str | None = None
     item_type: Literal["drink", "food", "other"] = "other"
+    pack_size: int = 1
 
     def model_post_init(self, __context) -> None:
+        if self.pack_size < 1:
+            raise ValueError("A pack holds at least one unit")
         if not self.name.strip():
             raise ValueError("An item needs a name")
         if self.price <= 0:

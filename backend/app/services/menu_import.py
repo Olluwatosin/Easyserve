@@ -66,6 +66,9 @@ class ParsedItem:
     category: str | None = None
     item_type: str = "other"
     unit_cost: float | None = None
+    #: Units per case. A lounge buys beer by the crate and counts it by the
+    #: bottle, and a delivery of "5 crates" is meaningless without this.
+    pack_size: int = 1
     description: str | None = None
     #: "high" for a column that said what it was, "low" for a line we split on
     #: a guess. The review screen sorts the doubtful ones to the top.
@@ -145,6 +148,7 @@ _HEADER_ALIASES = {
     "unit_cost": {"cost", "unit cost", "cost price", "buying price", "purchase price"},
     "category": {"category", "section", "group", "type", "menu section"},
     "item_type": {"item type", "kind", "food/drink", "drink/food"},
+    "pack_size": {"pack size", "pack", "crate", "crate size", "units per case", "case size"},
 }
 
 
@@ -201,6 +205,7 @@ def parse_csv(data: bytes) -> ParseResult:
                 category=category,
                 item_type=item_type,
                 unit_cost=parse_price(rec.get("unit_cost", "")),
+                pack_size=max(1, int(float(rec["pack_size"]))) if rec.get("pack_size", "").strip().replace(".", "").isdigit() else 1,
                 confidence="high" if has_header else "low",
             )
         )

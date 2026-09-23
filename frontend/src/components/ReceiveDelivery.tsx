@@ -27,6 +27,9 @@ interface StockItem {
   unit_cost: number | null;
   stock_quantity: number;
   stock_pack_size: number;
+  /** False until this item has ever been counted or received. */
+  tracked: boolean;
+  item_type: string;
 }
 
 interface Line {
@@ -50,16 +53,39 @@ export function ReceiveDelivery({
   const [supplier, setSupplier] = useState("");
   const [reference, setReference] = useState("");
   const [busy, setBusy] = useState(false);
+  const [kind, setKind] = useState<"all" | "drink" | "food">("all");
 
   useEffect(() => {
-    api.get("/stock").then((r) => setItems(r.data)).catch(() => {});
+    // The whole menu, not just what is already stock-tracked. A venue that has
+    // just imported its menu has nothing tracked at all — every item's level is
+    // unknown until something is received or counted — so loading /stock here
+    // showed an empty list and told the owner to add items that were already
+    // on the menu. Receiving an untracked item starts tracking it, which makes
+    // this screen the natural place to open the books on a new bar.
+    api
+      .get("/menu/items")
+      .then((r) =>
+        setItems(
+          (r.data as Array<Record<string, unknown>>).map((m) => ({
+            item_id: String(m.id),
+            name: String(m.name),
+            unit_cost: (m.unit_cost as number | null) ?? null,
+            stock_quantity: (m.stock_quantity as number | null) ?? 0,
+            stock_pack_size: (m.stock_pack_size as number) || 1,
+            tracked: m.stock_quantity !== null && m.stock_quantity !== undefined,
+            item_type: String(m.item_type ?? "other"),
+          })),
+        ),
+      )
+      .catch(() => {});
   }, []);
 
   const visible = useMemo(() => {
     const term = q.trim().toLowerCase();
-    if (!term) return items;
-    return items.filter((i) => i.name.toLowerCase().includes(term));
-  }, [items, q]);
+    return items
+      .filter((i) => kind === "all" || i.item_type === kind)
+      .filter((i) => !term || i.name.toLowerCase().includes(term));
+  }, [items, q, kind]);
 
   function set(id: string, field: keyof Line, value: string) {
     setLines((l) => ({ ...l, [id]: { ...(l[id] ?? EMPTY), [field]: value } }));
@@ -172,6 +198,25 @@ export function ReceiveDelivery({
           </div>
         </div>
 
+        <div className="flex gap-1.5 mb-3">
+          {([["all", "Everything"], ["drink", "Drinks"], ["food", "Food"]] as const).map(
+            ([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setKind(k)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium"
+                style={{
+                  background: kind === k ? "rgba(0,212,180,0.13)" : "rgba(255,255,255,0.03)",
+                  border: `1px solid ${kind === k ? "rgba(0,212,180,0.38)" : "#1E2D42"}`,
+                  color: kind === k ? "var(--teal)" : "var(--muted)",
+                }}
+              >
+                {label}
+              </button>
+            ),
+          )}
+        </div>
+
         <div className="relative mb-3">
           <Search
             size={14}
@@ -208,7 +253,7 @@ export function ReceiveDelivery({
                     {item.name}
                   </p>
                   <p className="text-xs whitespace-nowrap" style={{ color: "var(--muted)" }}>
-                    {item.stock_quantity} on hand
+                    {item.tracked ? `${item.stock_quantity} on hand` : "not counted yet"}
                     {item.stock_pack_size > 1 && ` · crate of ${item.stock_pack_size}`}
                   </p>
                 </div>
@@ -244,7 +289,8 @@ export function ReceiveDelivery({
           })}
           {visible.length === 0 && (
             <p className="text-sm text-center py-8" style={{ color: "var(--muted)" }}>
-              Nothing matches that. Items must be on the menu before they can be received.
+              Nothing matches that. An item has to be on the menu before it can be
+            received — add it under Menu first.
             </p>
           )}
         </div>

@@ -10,7 +10,7 @@ import toast from "react-hot-toast";
 interface Category { id: string; name: string; sort_order: number; }
 interface MenuItem {
   id: string; category_id: string | null; name: string; description: string | null;
-  price: number; unit_cost: number | null; item_type: "drink" | "food" | "other"; is_available: boolean;
+  price: number; unit_cost: number | null; stock_pack_size: number; item_type: "drink" | "food" | "other"; is_available: boolean;
   order_count: number; image_url: string | null;
 }
 
@@ -29,7 +29,7 @@ export default function MenuPage() {
   const [showItemForm, setShowItemForm] = useState(false);
   const [editItem, setEditItem] = useState<MenuItem | null>(null);
   const [itemForm, setItemForm] = useState({
-    name: "", description: "", price: "", unit_cost: "",
+    name: "", description: "", price: "", unit_cost: "", pack_size: "",
     item_type: "drink" as "drink" | "food" | "other",
     category_id: "", image_url: "",
   });
@@ -53,7 +53,7 @@ export default function MenuPage() {
 
   function openAddItem() {
     setEditItem(null);
-    setItemForm({ name: "", description: "", price: "", unit_cost: "", item_type: "drink", category_id: "", image_url: "" });
+    setItemForm({ name: "", description: "", price: "", unit_cost: "", pack_size: "", item_type: "drink", category_id: "", image_url: "" });
     setShowItemForm(true);
     setShowCatForm(false);
   }
@@ -65,6 +65,7 @@ export default function MenuPage() {
       description: item.description ?? "",
       price: String(item.price),
       unit_cost: item.unit_cost == null ? "" : String(item.unit_cost),
+      pack_size: item.stock_pack_size > 1 ? String(item.stock_pack_size) : "",
       item_type: item.item_type,
       category_id: item.category_id ?? "",
       image_url: item.image_url ?? "",
@@ -98,6 +99,7 @@ export default function MenuPage() {
       // Blank is "we don't know", not free. Sending 0 would report this line as
       // pure margin and quietly drag every stock valuation down with it.
       unit_cost: itemForm.unit_cost.trim() === "" ? null : parseFloat(itemForm.unit_cost),
+      stock_pack_size: itemForm.pack_size.trim() === "" ? 1 : parseInt(itemForm.pack_size),
       item_type: itemForm.item_type,
       category_id: itemForm.category_id || null,
       image_url: itemForm.image_url || null,
@@ -311,6 +313,22 @@ export default function MenuPage() {
                   const pct = Math.round(((p - c) / p) * 1000) / 10;
                   return `You keep ₦${(p - c).toLocaleString()} per unit — ${pct}% margin.`;
                 })()}
+              </p>
+            </div>
+            <div>
+              <label className="block text-text-soft text-sm mb-1.5">
+                Units per crate
+              </label>
+              <input
+                className="input"
+                type="number"
+                value={itemForm.pack_size}
+                onChange={(e) => setItemForm((f) => ({ ...f, pack_size: e.target.value }))}
+                placeholder="leave blank if sold singly"
+              />
+              <p className="text-xs mt-1.5" style={{ color: "var(--muted)" }}>
+                How many come in a case, so a delivery can be entered as crates
+                rather than counted out bottle by bottle.
               </p>
             </div>
             <div>

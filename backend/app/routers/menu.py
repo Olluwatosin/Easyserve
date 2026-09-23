@@ -126,6 +126,7 @@ async def commit_menu_import(
             price=row.price,
             unit_cost=row.unit_cost,
             item_type=row.item_type,
+            stock_pack_size=row.pack_size,
         )
         db.add(item)
         taken.add(name.lower())

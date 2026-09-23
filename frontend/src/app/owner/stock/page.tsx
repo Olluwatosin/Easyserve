@@ -72,6 +72,7 @@ export default function StockPage() {
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
   const [receiving, setReceiving] = useState(false);
+  const [menuCount, setMenuCount] = useState<number | null>(null);
   const [only, setOnly] = useState<"all" | "low" | "out">("all");
 
   /** What the owner is actually looking at. A bar carries a hundred lines and
@@ -85,6 +86,10 @@ export default function StockPage() {
 
   async function load() {
     try {
+      api
+        .get("/menu/items")
+        .then((r) => setMenuCount((r.data as unknown[]).length))
+        .catch(() => {});
       const { data } = await api.get<StockItem[]>("/stock");
       setItems(data);
     } catch {
@@ -310,6 +315,31 @@ export default function StockPage() {
 
       {receiving && (
         <ReceiveDelivery onClose={() => setReceiving(false)} onReceived={load} />
+      )}
+
+      {/* Nothing is stock-tracked until it has been received or counted, so a
+          venue that has just entered its menu lands here on an empty page.
+          Without this it looks broken rather than unstarted. */}
+      {!loading && items.length === 0 && (
+        <div
+          className="rounded-2xl px-5 py-8 text-center"
+          style={{ background: "rgba(15,25,35,0.58)", border: "1px solid #1E2D42" }}
+        >
+          <Package size={24} style={{ color: "var(--muted)", margin: "0 auto 10px" }} />
+          <p className="text-sm mb-1" style={{ color: "var(--text)" }}>
+            Nothing is being counted yet
+          </p>
+          <p className="text-xs mb-5 max-w-md mx-auto" style={{ color: "var(--muted)" }}>
+            {menuCount === 0
+              ? "Add your menu first — stock is counted against the items on it."
+              : `You have ${menuCount ?? "…"} items on the menu. Book in your opening delivery and the ones you actually hold start being counted, at the cost you paid.`}
+          </p>
+          {menuCount !== 0 && (
+            <button onClick={() => setReceiving(true)} className="btn-teal px-5">
+              <Truck size={16} /> Book in a delivery
+            </button>
+          )}
+        </div>
       )}
 
       {/* ── Find it ─────────────────────────────────────────────────────── */}

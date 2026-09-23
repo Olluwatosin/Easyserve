@@ -31,6 +31,7 @@ interface Row {
   unit_cost: number | null;
   category: string | null;
   item_type: ItemType;
+  pack_size: number;
   confidence: string;
   keep: boolean;
 }
@@ -103,6 +104,7 @@ export function MenuImport({
           unit_cost: r.unit_cost,
           category: r.category?.trim() || null,
           item_type: r.item_type,
+          pack_size: r.pack_size || 1,
         })),
       });
       toast.success(`${data.created} items added to your menu`);
