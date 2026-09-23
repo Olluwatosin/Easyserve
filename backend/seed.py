@@ -146,21 +146,53 @@ STAFF = [
 ]
 
 
+def _refuse_in_production() -> None:
+    """This script deletes every row in every table.
+
+    It exists for the demo and for local development. Pointed at a venue's own
+    database it would erase a night's trading, and the only warning would be the
+    word "seeded" in a log.
+    """
+    import os
+
+    env = os.environ.get("ENVIRONMENT", "development").lower()
+    if env not in ("development", "demo", "test"):
+        raise RuntimeError(
+            f"Refusing to seed: ENVIRONMENT is {env!r}. This script deletes every "
+            "row in every table and is only ever meant for the demo or a local "
+            "machine."
+        )
+
+
 async def seed():
+    """Rebuild The Grand Noir, all or nothing.
+
+    The wipe and the rebuild are one transaction, and that is not a detail. The
+    wipe used to commit on its own, so anything that failed afterwards left the
+    venue deleted and nothing in its place — which is exactly what happened when
+    a migration added a NOT NULL column this script did not set. The demo served
+    an empty venue until someone noticed.
+
+    Now a failure rolls the whole thing back and the previous data is still
+    there. A reset that cannot restore should not be able to destroy.
+    """
+    _refuse_in_production()
+
     async with AsyncSessionLocal() as db:
 
         # ── Venue + owner ────────────────────────────────────────────────────
         existing = await db.execute(select(Venue).where(Venue.slug == "the-grand-noir"))
         if existing.scalar_one_or_none():
             print("Seed already exists — clearing and re-seeding...")
-            # Simple approach: just proceed, duplicates will be skipped or errored
-            # Better: wipe and redo
             from sqlalchemy import text
-            for tbl in ["exit_passes","payments","order_items","orders","alerts","feedback",
+            # Child tables first: the deletes have to respect foreign keys in
+            # the same order whether or not they are committed separately.
+            for tbl in ["shifts","exit_passes","payments","order_items","orders","alerts","feedback",
                         "promos","audit_logs","menu_items","menu_categories","tables","users","venues"]:
                 await db.execute(text(f"DELETE FROM {tbl} WHERE TRUE"))
-            await db.commit()
-            print("Cleared existing data.")
+            # Deliberately NOT committed here. Everything below rides on the
+            # same transaction, so a failure takes the deletes with it.
+            print("Cleared existing data (pending commit).")
 
         venue_id = nid()
         venue = Venue(
