@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ClipboardCheck,
+  ClipboardList,
   Truck,
   Minus,
   Package,
@@ -15,6 +16,7 @@ import toast from "react-hot-toast";
 
 import { api } from "@/lib/api";
 import { ReceiveDelivery } from "@/components/ReceiveDelivery";
+import { ReorderList } from "@/components/ReorderList";
 import { formatNGN } from "@/lib/utils";
 
 interface StockItem {
@@ -73,6 +75,7 @@ export default function StockPage() {
   const [q, setQ] = useState("");
   const [receiving, setReceiving] = useState(false);
   const [menuCount, setMenuCount] = useState<number | null>(null);
+  const [ordering, setOrdering] = useState(false);
   const [only, setOnly] = useState<"all" | "low" | "out">("all");
 
   /** What the owner is actually looking at. A bar carries a hundred lines and
@@ -213,6 +216,18 @@ export default function StockPage() {
           >
             <Truck size={16} /> Book in delivery
           </button>
+          <button
+            onClick={() => setOrdering(true)}
+            className="px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2"
+            style={{
+              background: totals.low + totals.out > 0 ? "rgba(255,179,71,0.1)" : "rgba(255,255,255,0.03)",
+              border: `1px solid ${totals.low + totals.out > 0 ? "rgba(255,179,71,0.34)" : "#1E2D42"}`,
+              color: totals.low + totals.out > 0 ? "var(--amber)" : "var(--muted)",
+            }}
+          >
+            <ClipboardList size={16} /> What to order
+            {totals.low + totals.out > 0 && ` (${totals.low + totals.out})`}
+          </button>
           <button onClick={() => setCounting((v) => !v)} className="btn-teal px-5">
             <ClipboardCheck size={16} />
             {counting ? "Cancel count" : "Start nightly count"}
@@ -316,6 +331,7 @@ export default function StockPage() {
       {receiving && (
         <ReceiveDelivery onClose={() => setReceiving(false)} onReceived={load} />
       )}
+      {ordering && <ReorderList onClose={() => setOrdering(false)} />}
 
       {/* Nothing is stock-tracked until it has been received or counted, so a
           venue that has just entered its menu lands here on an empty page.

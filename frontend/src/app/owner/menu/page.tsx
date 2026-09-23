@@ -10,7 +10,7 @@ import toast from "react-hot-toast";
 interface Category { id: string; name: string; sort_order: number; }
 interface MenuItem {
   id: string; category_id: string | null; name: string; description: string | null;
-  price: number; unit_cost: number | null; stock_pack_size: number; item_type: "drink" | "food" | "other"; is_available: boolean;
+  price: number; unit_cost: number | null; stock_pack_size: number; stock_par: number | null; stock_threshold: number; item_type: "drink" | "food" | "other"; is_available: boolean;
   order_count: number; image_url: string | null;
 }
 
@@ -29,7 +29,7 @@ export default function MenuPage() {
   const [showItemForm, setShowItemForm] = useState(false);
   const [editItem, setEditItem] = useState<MenuItem | null>(null);
   const [itemForm, setItemForm] = useState({
-    name: "", description: "", price: "", unit_cost: "", pack_size: "",
+    name: "", description: "", price: "", unit_cost: "", pack_size: "", par: "", threshold: "",
     item_type: "drink" as "drink" | "food" | "other",
     category_id: "", image_url: "",
   });
@@ -53,7 +53,7 @@ export default function MenuPage() {
 
   function openAddItem() {
     setEditItem(null);
-    setItemForm({ name: "", description: "", price: "", unit_cost: "", pack_size: "", item_type: "drink", category_id: "", image_url: "" });
+    setItemForm({ name: "", description: "", price: "", unit_cost: "", pack_size: "", par: "", threshold: "", item_type: "drink", category_id: "", image_url: "" });
     setShowItemForm(true);
     setShowCatForm(false);
   }
@@ -66,6 +66,8 @@ export default function MenuPage() {
       price: String(item.price),
       unit_cost: item.unit_cost == null ? "" : String(item.unit_cost),
       pack_size: item.stock_pack_size > 1 ? String(item.stock_pack_size) : "",
+      par: item.stock_par == null ? "" : String(item.stock_par),
+      threshold: item.stock_threshold == null ? "" : String(item.stock_threshold),
       item_type: item.item_type,
       category_id: item.category_id ?? "",
       image_url: item.image_url ?? "",
@@ -100,6 +102,8 @@ export default function MenuPage() {
       // pure margin and quietly drag every stock valuation down with it.
       unit_cost: itemForm.unit_cost.trim() === "" ? null : parseFloat(itemForm.unit_cost),
       stock_pack_size: itemForm.pack_size.trim() === "" ? 1 : parseInt(itemForm.pack_size),
+      stock_par: itemForm.par.trim() === "" ? null : parseInt(itemForm.par),
+      ...(itemForm.threshold.trim() === "" ? {} : { stock_threshold: parseInt(itemForm.threshold) }),
       item_type: itemForm.item_type,
       category_id: itemForm.category_id || null,
       image_url: itemForm.image_url || null,
@@ -329,6 +333,38 @@ export default function MenuPage() {
               <p className="text-xs mt-1.5" style={{ color: "var(--muted)" }}>
                 How many come in a case, so a delivery can be entered as crates
                 rather than counted out bottle by bottle.
+              </p>
+            </div>
+            <div>
+              <label className="block text-text-soft text-sm mb-1.5">Reorder at</label>
+              <input
+                className="input"
+                type="number"
+                value={itemForm.threshold}
+                onChange={(e) => setItemForm((f) => ({ ...f, threshold: e.target.value }))}
+                placeholder="units left when you want warning"
+              />
+            </div>
+            <div>
+              <label className="block text-text-soft text-sm mb-1.5">Keep in stock</label>
+              <input
+                className="input"
+                type="number"
+                value={itemForm.par}
+                onChange={(e) => setItemForm((f) => ({ ...f, par: e.target.value }))}
+                placeholder="how many you want on the shelf"
+              />
+              <p className="text-xs mt-1.5" style={{ color: "var(--muted)" }}>
+                {(() => {
+                  const par = parseInt(itemForm.par);
+                  const pack = parseInt(itemForm.pack_size) || 1;
+                  if (!isFinite(par) || par <= 0) {
+                    return "Without this the order list can flag the item but not say how many to buy.";
+                  }
+                  return pack > 1
+                    ? `About ${Math.ceil(par / pack)} crates.`
+                    : `${par} units.`;
+                })()}
               </p>
             </div>
             <div>

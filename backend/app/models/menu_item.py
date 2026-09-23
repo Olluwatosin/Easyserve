@@ -37,7 +37,13 @@ class MenuItem(Base):
     # 1 means the item is simply counted individually.
     stock_pack_size: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     # Warn the owner at or below this level, in units.
+    # Reorder point: warn at or below this.
     stock_threshold: Mapped[int] = mapped_column(Integer, default=10, nullable=False)
+    # Target level: how many the venue wants on the shelf. The reorder list
+    # suggests the difference. Null means no target has been set, and the list
+    # says so rather than inventing a quantity — an invented order is money
+    # spent on the system's guess.
+    stock_par: Mapped[int | None] = mapped_column(Integer, nullable=True)
     order_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

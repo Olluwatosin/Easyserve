@@ -17,11 +17,12 @@ import logging
 import uuid
 from datetime import datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.menu_item import MenuItem
 from app.models.stock_movement import StockMovement
+from app.utils.venue_time import BUSINESS_DAY_START_HOUR, VENUE_TZ_NAME
 
 logger = logging.getLogger(__name__)
 
@@ -164,6 +165,126 @@ async def adjust_stock(
         "stock_quantity": item.stock_quantity,
         "is_low": (item.stock_quantity or 0) <= item.stock_threshold,
     }
+
+
+def _summarise_rate(rows) -> dict[str, tuple[float, int]]:
+    per_item: dict[str, list[int]] = {}
+    for item_id, _night, sold in rows:
+        per_item.setdefault(item_id, []).append(int(sold or 0))
+    out: dict[str, tuple[float, int]] = {}
+    for item_id, sold_per_night in per_item.items():
+        counted = len(sold_per_night)
+        out[item_id] = (sum(sold_per_night) / counted, counted)
+    return out
+
+
+async def get_reorder_list(db: AsyncSession, venue_id: str) -> dict:
+    """What to buy before the next busy night.
+
+    Two numbers decide it, and they are different facts: the reorder point says
+    *act*, the target says *how much*. A single threshold could only ever do the
+    first, which is why the old low-stock warning told an owner something was
+    wrong and nothing about what to do.
+
+    Where there is enough trading history, each line also carries how many
+    nights the current shelf will last. That is division, not prediction, and it
+    is described as what it is — at the current rate. It stays silent until
+    there are at least two trading nights behind it, because an average of one
+    night is not an average, and a confident number from no evidence is worse
+    than no number.
+    """
+    result = await db.execute(
+        select(MenuItem)
+        .where(MenuItem.venue_id == venue_id, MenuItem.stock_quantity.isnot(None))
+        .order_by(MenuItem.name)
+    )
+    items = list(result.scalars().all())
+
+    rate = await _sales_rate_by_night(db, venue_id)
+
+    lines: list[dict] = []
+    total_cost = 0.0
+    priced_all = True
+    for item in items:
+        qty = item.stock_quantity or 0
+        if qty > item.stock_threshold:
+            continue
+
+        pack = item.stock_pack_size or 1
+        par = item.stock_par
+        shortfall = max(0, par - qty) if par is not None else None
+        # Ordering happens in whole cases, so round up to one.
+        packs = -(-shortfall // pack) if shortfall else None
+        units = packs * pack if packs else None
+
+        cost = float(item.unit_cost) if item.unit_cost is not None else None
+        line_cost = round(cost * units, 2) if (cost is not None and units) else None
+        if line_cost is not None:
+            total_cost += line_cost
+        elif units:
+            priced_all = False
+
+        per_night, nights_counted = rate.get(item.id, (0.0, 0))
+        nights_left = (
+            round(qty / per_night, 1)
+            if per_night > 0 and nights_counted >= 2
+            else None
+        )
+
+        lines.append({
+            "item_id": item.id,
+            "name": item.name,
+            "item_type": item.item_type,
+            "on_hand": qty,
+            "reorder_at": item.stock_threshold,
+            "par": par,
+            "pack_size": pack,
+            "suggested_packs": packs,
+            "suggested_units": units,
+            "unit_cost": cost,
+            "line_cost": line_cost,
+            "is_out": qty == 0,
+            # Silent until there is enough history to mean anything.
+            "sells_per_night": round(per_night, 1) if nights_counted >= 2 else None,
+            "nights_of_cover": nights_left,
+            "nights_counted": nights_counted,
+        })
+
+    return {
+        "lines": lines,
+        "count": len(lines),
+        "out_of_stock": sum(1 for l in lines if l["is_out"]),
+        "no_target_set": sum(1 for l in lines if l["par"] is None),
+        "estimated_cost": round(total_cost, 2),
+        "fully_priced": priced_all,
+    }
+
+
+async def _sales_rate_by_night(
+    db: AsyncSession, venue_id: str, nights: int = 28
+) -> dict[str, tuple[float, int]]:
+    """Units sold per trading night, per item — see `get_reorder_list`."""
+    night = (
+        func.date(
+            func.timezone(VENUE_TZ_NAME, StockMovement.created_at)
+            - text(f"INTERVAL '{BUSINESS_DAY_START_HOUR} hours'")
+        )
+    ).label("night")
+
+    rows = await db.execute(
+        select(
+            StockMovement.menu_item_id,
+            night,
+            func.sum(-StockMovement.delta).label("sold"),
+        )
+        .where(
+            StockMovement.venue_id == venue_id,
+            StockMovement.reason == "sale",
+            StockMovement.created_at >= func.now() - text(f"INTERVAL '{nights} days'"),
+        )
+        .group_by(StockMovement.menu_item_id, night)
+    )
+    return _summarise_rate(rows.all())
 
 
 async def receive_delivery(

@@ -38,6 +38,7 @@ class MenuItemCreate(BaseModel):
     stock_quantity: int | None = None
     stock_pack_size: int = 1
     stock_threshold: int = 10
+    stock_par: int | None = None
 
 
 class MenuItemUpdate(BaseModel):
@@ -52,6 +53,7 @@ class MenuItemUpdate(BaseModel):
     stock_quantity: int | None = None
     stock_pack_size: int | None = None
     stock_threshold: int | None = None
+    stock_par: int | None = None
 
 
 class MenuItemResponse(BaseModel):
@@ -71,6 +73,7 @@ class MenuItemResponse(BaseModel):
     stock_quantity: int | None = None
     stock_pack_size: int = 1
     stock_threshold: int
+    stock_par: int | None = None
     order_count: int
 
     model_config = {"from_attributes": True}

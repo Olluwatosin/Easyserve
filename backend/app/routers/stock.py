@@ -84,6 +84,15 @@ async def submit_count(
         raise HTTPException(status_code=404, detail=str(exc))
 
 
+@router.get("/reorder")
+async def reorder_list(
+    current_user: User = Depends(require_roles("owner")),
+    db: AsyncSession = Depends(get_db),
+):
+    """What to buy before the next busy night."""
+    return await stock_service.get_reorder_list(db, current_user.venue_id)
+
+
 @router.get("/variance")
 async def get_variance(
     current_user: User = Depends(require_roles("owner")),
