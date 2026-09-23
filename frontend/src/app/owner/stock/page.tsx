@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   ClipboardCheck,
+  Truck,
   Minus,
   Package,
   Plus,
@@ -13,6 +14,7 @@ import {
 import toast from "react-hot-toast";
 
 import { api } from "@/lib/api";
+import { ReceiveDelivery } from "@/components/ReceiveDelivery";
 import { formatNGN } from "@/lib/utils";
 
 interface StockItem {
@@ -69,6 +71,7 @@ export default function StockPage() {
   const [result, setResult] = useState<CountResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [q, setQ] = useState("");
+  const [receiving, setReceiving] = useState(false);
   const [only, setOnly] = useState<"all" | "low" | "out">("all");
 
   /** What the owner is actually looking at. A bar carries a hundred lines and
@@ -97,7 +100,11 @@ export default function StockPage() {
 
   const totals = useMemo(
     () => ({
-      value: items.reduce((s, i) => s + i.value, 0),
+      // Only the priced lines. One null would turn the whole total into NaN,
+      // and a total that silently excludes items must say that it does —
+      // see `unpriced` below, which is shown next to it.
+      value: items.reduce((s, i) => s + (i.value ?? 0), 0),
+      unpriced: items.filter((i) => i.value == null).length,
       low: items.filter((i) => i.is_low && !i.is_out).length,
       out: items.filter((i) => i.is_out).length,
     }),
@@ -182,12 +189,30 @@ export default function StockPage() {
           </h1>
           <p className="text-sm mt-1" style={{ color: "var(--text-soft)" }}>
             {items.length} tracked items · {formatNGN(totals.value)} on the shelf
+            {totals.unpriced > 0 && (
+              <span style={{ color: "var(--amber)" }}>
+                {" "}· {totals.unpriced} with no cost set
+              </span>
+            )}
           </p>
         </div>
-        <button onClick={() => setCounting((v) => !v)} className="btn-teal px-5">
-          <ClipboardCheck size={16} />
-          {counting ? "Cancel count" : "Start nightly count"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setReceiving(true)}
+            className="px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2"
+            style={{
+              background: "rgba(0,212,180,0.1)",
+              border: "1px solid rgba(0,212,180,0.32)",
+              color: "var(--teal)",
+            }}
+          >
+            <Truck size={16} /> Book in delivery
+          </button>
+          <button onClick={() => setCounting((v) => !v)} className="btn-teal px-5">
+            <ClipboardCheck size={16} />
+            {counting ? "Cancel count" : "Start nightly count"}
+          </button>
+        </div>
       </div>
 
       {(totals.out > 0 || totals.low > 0) && (
@@ -281,6 +306,10 @@ export default function StockPage() {
             </div>
           )}
         </div>
+      )}
+
+      {receiving && (
+        <ReceiveDelivery onClose={() => setReceiving(false)} onReceived={load} />
       )}
 
       {/* ── Find it ─────────────────────────────────────────────────────── */}

@@ -166,6 +166,109 @@ async def adjust_stock(
     }
 
 
+async def receive_delivery(
+    db: AsyncSession,
+    venue_id: str,
+    lines: list[dict],
+    actor_id: str,
+    *,
+    reference: str | None = None,
+    supplier: str | None = None,
+) -> dict:
+    """Book in a delivery — the other half of stock, and the half that was missing.
+
+    Everything until now could only take stock *out*: sales deplete it, voids
+    return it, a count corrects it. Stock arriving had to be entered one item at
+    a time as a manual adjustment, which is neither how a delivery arrives nor
+    how anyone would choose to enter thirty lines off an invoice.
+
+    Three things it does that a loop of `adjust_stock` would not:
+
+    **It is one transaction.** A delivery is booked in whole or not at all.
+    Half a delivery committed because the tenth line named a deleted item is a
+    stock level nobody can reconcile against the paper it came from.
+
+    **It counts in the units the invoice uses.** A lounge buys beer in crates
+    and spirits by the bottle. `packs` is multiplied by the item's own pack
+    size, so what gets typed matches what was delivered.
+
+    **It is where cost gets updated.** Cost moves with every delivery, and this
+    is the one moment the venue is holding the invoice that proves the new one.
+    Asking later means never.
+    """
+    if not lines:
+        raise ValueError("A delivery needs at least one line")
+
+    ids = [str(l["item_id"]) for l in lines]
+    result = await db.execute(
+        select(MenuItem).where(MenuItem.id.in_(ids), MenuItem.venue_id == venue_id)
+    )
+    items = {i.id: i for i in result.scalars().all()}
+
+    missing = [i for i in ids if i not in items]
+    if missing:
+        # Named rather than counted: the person is looking at an invoice and
+        # needs to know which line to fix.
+        raise LookupError(f"{len(missing)} item(s) on this delivery are not on the menu")
+
+    note = " · ".join(p for p in [supplier, reference] if p) or None
+    booked = []
+    for line in lines:
+        item = items[str(line["item_id"])]
+        packs = int(line.get("packs") or 0)
+        units = int(line.get("units") or 0)
+        total = packs * (item.stock_pack_size or 1) + units
+        if total <= 0:
+            continue
+
+        if item.stock_quantity is None:
+            # Receiving an untracked item starts tracking it, beginning at zero,
+            # so "24 delivered" reads as 24 rather than as unknown.
+            item.stock_quantity = 0
+
+        # The invoice is the evidence, so this is the cost we believe.
+        new_cost = line.get("unit_cost")
+        cost_changed = None
+        if new_cost is not None:
+            before = float(item.unit_cost) if item.unit_cost is not None else None
+            if before != float(new_cost):
+                cost_changed = {"from": before, "to": float(new_cost)}
+            item.unit_cost = float(new_cost)
+
+        await record_movement(
+            db, item, total, "restock", actor_id=actor_id, note=note,
+        )
+        booked.append({
+            "item_id": item.id,
+            "name": item.name,
+            "received": total,
+            "stock_quantity": item.stock_quantity,
+            "cost_changed": cost_changed,
+        })
+
+    if not booked:
+        raise ValueError("Every line on this delivery was zero")
+
+    await db.commit()
+
+    value = sum(
+        (float(items[b["item_id"]].unit_cost) or 0) * b["received"]
+        for b in booked
+        if items[b["item_id"]].unit_cost is not None
+    )
+    return {
+        "reference": reference,
+        "supplier": supplier,
+        "lines": booked,
+        "items_received": len(booked),
+        "units_received": sum(b["received"] for b in booked),
+        "value": round(value, 2),
+        # Whether the total above covers everything, so the UI does not present
+        # a partial figure as the cost of the delivery.
+        "fully_priced": all(items[b["item_id"]].unit_cost is not None for b in booked),
+    }
+
+
 async def _movements_since(
     db: AsyncSession, venue_id: str, since: datetime
 ) -> dict[str, dict[str, int]]:

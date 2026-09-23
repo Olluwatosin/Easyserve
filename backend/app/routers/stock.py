@@ -4,7 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.dependencies import require_roles
 from app.models.user import User
-from app.schemas.stock import StockAdjustRequest, StockCountRequest
+from app.schemas.stock import (
+    ReceiveDeliveryRequest,
+    StockAdjustRequest,
+    StockCountRequest,
+)
 from app.services import stock_service
 
 router = APIRouter(prefix="/stock", tags=["stock"])
@@ -17,6 +21,34 @@ async def list_stock(
 ):
     """Current levels for every tracked item."""
     return await stock_service.list_stock(db, current_user.venue_id)
+
+
+@router.post("/receive")
+async def receive_delivery(
+    req: ReceiveDeliveryRequest,
+    current_user: User = Depends(require_roles("owner")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Book in a supplier delivery.
+
+    Owner only. Receiving is the one action that can raise stock levels by an
+    arbitrary amount without anything to reconcile against, so it is the action
+    most worth keeping in one pair of hands — the same reasoning that keeps
+    transfers away from attendants.
+    """
+    try:
+        return await stock_service.receive_delivery(
+            db,
+            current_user.venue_id,
+            [l.model_dump() for l in req.lines],
+            current_user.id,
+            reference=req.reference,
+            supplier=req.supplier,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.patch("/{item_id}")
