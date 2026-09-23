@@ -10,6 +10,7 @@ from app.models.menu_item import MenuItem
 from app.models.table import Table
 from app.models.user import User
 from app.models.venue import Venue
+from app.utils.venue_time import business_date
 from app.schemas.order import PlaceOrderRequest
 from app.services.routing_service import determine_route, route_new_order
 from app.services.promo_service import get_active_promos, apply_promo
@@ -133,6 +134,7 @@ async def place_order(db: AsyncSession, qr_token: str, req: PlaceOrderRequest) -
             assigned_to=table.assigned_attendant_id,
             session_token=session_token,
             order_source=req.order_source,
+            business_date=business_date(),
             client_request_id=req.client_request_id,
             total_amount=round(total, 2),
             customer_phone=req.customer_phone,

@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Numeric, String, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -21,6 +21,10 @@ class Payment(Base):
         String(36), ForeignKey("venues.id", ondelete="CASCADE"), nullable=False
     )
     amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    # Which night this belongs to, decided when the row is written rather than
+    # recomputed later. A venue's rollover hour is about to become a setting,
+    # and query-time arithmetic would let changing it rewrite every past report.
+    business_date: Mapped[date] = mapped_column(Date, nullable=False)
     method: Mapped[str] = mapped_column(String(20), nullable=False)
     recorded_by: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True

@@ -147,7 +147,14 @@ preview: stop db
 # Always the throwaway database. conftest.py refuses anything else, so this
 # cannot quietly become a run against production.
 
+# The test database is rebuilt every run. Tests create their schema with
+# `create_all`, which creates missing tables but never alters existing ones — so
+# a reused database silently drifts from the models, and the first symptom is a
+# column that exists in the code and not in the table. Dropping costs a second
+# and removes the whole class of confusion.
 test: db
+	@dropdb -h 127.0.0.1 -p $(PGPORT) -U postgres --if-exists $(TEST_DB)
+	@createdb -h 127.0.0.1 -p $(PGPORT) -U postgres $(TEST_DB)
 	@cd backend && $(TEST_ENV) $(VENV)/python -m pytest -q
 
 reset:

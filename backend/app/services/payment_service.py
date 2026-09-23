@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 
 from app.models.order import Order
 from app.models.payment import Payment
+from app.utils.venue_time import business_date
 from app.models.exit_pass import ExitPass
 from app.models.venue import Venue
 from app.schemas.payment import PaymentCreate, CashPaymentCreate
@@ -47,6 +48,7 @@ async def record_payment(db: AsyncSession, req: PaymentCreate, cashier_id: str, 
     )
 
     payment = Payment(
+        business_date=business_date(),
         id=str(uuid.uuid4()),
         order_id=order.id,
         venue_id=order.venue_id,
@@ -133,6 +135,7 @@ async def initiate_gateway_payment(
 
     reference = f"es_{uuid.uuid4().hex}"
     payment = Payment(
+        business_date=business_date(),
         id=str(uuid.uuid4()),
         order_id=order.id,
         venue_id=order.venue_id,

@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Numeric, String, func
+from sqlalchemy import Date, DateTime, ForeignKey, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -32,6 +32,10 @@ class Order(Base):
     )
     status: Mapped[str] = mapped_column(String(20), default="open", nullable=False)
     order_source: Mapped[str] = mapped_column(String(20), default="qr_scan", nullable=False)
+    # Which night this belongs to, decided when the row is written rather than
+    # recomputed later. A venue's rollover hour is about to become a setting,
+    # and query-time arithmetic would let changing it rewrite every past report.
+    business_date: Mapped[date] = mapped_column(Date, nullable=False)
     total_amount: Mapped[float] = mapped_column(Numeric(12, 2), default=0, nullable=False)
     customer_phone: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     # Snapshots computed from the venue's percentages when the order changes,

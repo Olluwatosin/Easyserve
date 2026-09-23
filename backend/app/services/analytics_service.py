@@ -21,16 +21,20 @@ from app.utils.venue_time import (  # noqa: E402
     VENUE_TZ_NAME,
     BUSINESS_DAY_START_HOUR,
     LAGOS,
+    business_date,
     business_day_start,
 )
 
 
 async def get_summary(db: AsyncSession, venue_id: str) -> dict:
-    today_start = business_day_start()
+    # The night as it was stamped on each row, not recomputed from a constant.
+    # A venue's rollover hour is a setting; recomputing would let changing it
+    # rewrite figures that were already read and acted on.
+    tonight = business_date()
 
     rev = await db.execute(
         select(func.coalesce(func.sum(Payment.amount), 0))
-        .where(Payment.venue_id == venue_id, Payment.created_at >= today_start)
+        .where(Payment.venue_id == venue_id, Payment.business_date == tonight)
     )
     today_revenue = float(rev.scalar())
 
@@ -42,7 +46,7 @@ async def get_summary(db: AsyncSession, venue_id: str) -> dict:
 
     served = await db.execute(
         select(func.count(func.distinct(Order.table_id)))
-        .where(Order.venue_id == venue_id, Order.created_at >= today_start, Order.status == "paid")
+        .where(Order.venue_id == venue_id, Order.business_date == tonight, Order.status == "paid")
     )
     tables_served = int(served.scalar())
 
@@ -61,29 +65,29 @@ async def get_summary(db: AsyncSession, venue_id: str) -> dict:
 
 
 async def get_tonight_summary(db: AsyncSession, venue_id: str) -> dict:
-    today_start = business_day_start()
+    tonight = business_date()
 
     rev = await db.execute(
         select(func.coalesce(func.sum(Payment.amount), 0))
-        .where(Payment.venue_id == venue_id, Payment.created_at >= today_start)
+        .where(Payment.venue_id == venue_id, Payment.business_date == tonight)
     )
     today_revenue = float(rev.scalar())
 
     total_orders_res = await db.execute(
         select(func.count(Order.id))
-        .where(Order.venue_id == venue_id, Order.created_at >= today_start)
+        .where(Order.venue_id == venue_id, Order.business_date == tonight)
     )
     total_orders = int(total_orders_res.scalar())
 
     paid_res = await db.execute(
         select(func.count(Order.id))
-        .where(Order.venue_id == venue_id, Order.created_at >= today_start, Order.status == "paid")
+        .where(Order.venue_id == venue_id, Order.business_date == tonight, Order.status == "paid")
     )
     paid_orders = int(paid_res.scalar())
 
     tables_res = await db.execute(
         select(func.count(func.distinct(Order.table_id)))
-        .where(Order.venue_id == venue_id, Order.created_at >= today_start, Order.status == "paid")
+        .where(Order.venue_id == venue_id, Order.business_date == tonight, Order.status == "paid")
     )
     tables_served = int(tables_res.scalar())
 
@@ -95,7 +99,7 @@ async def get_tonight_summary(db: AsyncSession, venue_id: str) -> dict:
             func.sum(OrderItem.price * OrderItem.quantity).label("rev"),
         )
         .join(Order, Order.id == OrderItem.order_id)
-        .where(Order.venue_id == venue_id, Order.created_at >= today_start)
+        .where(Order.venue_id == venue_id, Order.business_date == tonight)
         .group_by(OrderItem.name, OrderItem.item_type)
         .order_by(func.sum(OrderItem.price * OrderItem.quantity).desc())
         .limit(5)
@@ -268,6 +272,9 @@ async def get_shift_report(db: AsyncSession, venue_id: str) -> dict:
     This is the anti-theft report — expected cash per cashier vs what was
     recorded, and who cancelled what.
     """
+    tonight = business_date()
+    # The audit log has no stamp of its own, so voids are still read from the
+    # window. It is a list of actions, not money, and nothing is settled on it.
     today_start = business_day_start()
 
     # Per-cashier, per-method confirmed payments
@@ -283,7 +290,7 @@ async def get_shift_report(db: AsyncSession, venue_id: str) -> dict:
         .where(
             Payment.venue_id == venue_id,
             Payment.status == "confirmed",
-            Payment.created_at >= today_start,
+            Payment.business_date == tonight,
         )
         .group_by(Payment.recorded_by, User.full_name, Payment.method)
         .order_by(User.full_name)
@@ -335,7 +342,7 @@ async def get_shift_report(db: AsyncSession, venue_id: str) -> dict:
             Payment.venue_id == venue_id,
             Payment.status == "confirmed",
             Payment.verification == "manual",
-            Payment.created_at >= today_start,
+            Payment.business_date == tonight,
         )
         .order_by(Payment.created_at.desc())
     )
@@ -398,6 +405,8 @@ async def get_repeat_guests(db: AsyncSession, venue_id: str) -> list[dict]:
 
 
 async def get_exit_pass_log(db: AsyncSession, venue_id: str) -> list[dict]:
+    # Exit passes are not stamped: they live for one night, are never reported
+    # on afterwards, and nothing is reconciled against them.
     today_start = business_day_start()
     result = await db.execute(
         select(ExitPass, Order, Table)
