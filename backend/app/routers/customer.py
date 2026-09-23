@@ -186,6 +186,20 @@ async def submit_feedback(
     return fb
 
 
+@router.get("/pay-options/{session_token}")
+async def payment_options(session_token: str, db: AsyncSession = Depends(get_db)):
+    """What this guest can actually do to pay.
+
+    The bill used to offer "Pay online" unconditionally, so a venue without a
+    payment provider configured sent its guests to a button that answers with an
+    error. Offering something that cannot work is worse than not offering it —
+    the guest concludes the system is broken, not that this venue takes cash.
+    """
+    from app.services import paystack_service
+
+    return {"online": paystack_service.is_enabled()}
+
+
 @router.post("/pay/{session_token}")
 @limiter.limit("10/minute")
 async def initiate_customer_payment(

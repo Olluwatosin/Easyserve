@@ -66,6 +66,7 @@ export default function BillPage({
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [paying, setPaying] = useState(false);
+  const [canPayOnline, setCanPayOnline] = useState<boolean | null>(null);
   const [splitBy, setSplitBy] = useState(1);
 
   function load() {
@@ -75,6 +76,13 @@ export default function BillPage({
       .then((r) => setExitPass(r.data))
       .catch(() => {});
   }
+
+  useEffect(() => {
+    api
+      .get(`/customer/pay-options/${session_token}`)
+      .then((r) => setCanPayOnline(Boolean(r.data?.online)))
+      .catch(() => setCanPayOnline(false));
+  }, [session_token]);
 
   useEffect(() => {
     load();
@@ -358,14 +366,19 @@ export default function BillPage({
         {/* ── Payment actions ── */}
         {!allPaid && orders.length > 0 && (
           <div className="space-y-3">
-            <button
-              onClick={payOnline}
-              disabled={paying || !unpaidOrder}
-              className="btn-teal w-full flex items-center justify-center gap-2"
-            >
-              <CreditCard size={16} />
-              {paying ? "Opening secure checkout…" : "Pay Online — Transfer / Card / USSD"}
-            </button>
+            {/* Only offered when the venue can actually take it. A button that
+                answers with an error teaches the guest the system is broken,
+                rather than that this venue takes cash. */}
+            {canPayOnline && (
+              <button
+                onClick={payOnline}
+                disabled={paying || !unpaidOrder}
+                className="btn-teal w-full flex items-center justify-center gap-2"
+              >
+                <CreditCard size={16} />
+                {paying ? "Opening secure checkout…" : "Pay Online — Transfer / Card / USSD"}
+              </button>
+            )}
             <div
               className="rounded-2xl px-5 py-4 flex items-center gap-3"
               style={{
@@ -378,7 +391,9 @@ export default function BillPage({
                 style={{ color: "var(--amber)", flexShrink: 0 }}
               />
               <p className="text-sm" style={{ color: "var(--text-soft)" }}>
-                Or pay cash / POS at the cashier to collect your exit pass.
+                {canPayOnline
+                  ? "Or pay cash / POS at the cashier to collect your exit pass."
+                  : "Pay cash, POS or transfer at the cashier to collect your exit pass."}
               </p>
             </div>
           </div>
