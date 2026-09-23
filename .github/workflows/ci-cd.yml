@@ -64,8 +64,14 @@ jobs:
       # does not leave the old data — it leaves nothing. A NOT NULL column added
       # in a migration broke seed.py and took the public demo down, with the
       # tests all green, because nothing ever ran it. Now something does.
-      - name: Seed must work
+      # On a schema built by the migrations from nothing, which is what the
+      # demo and any real venue actually run. The tests above build their tables
+      # with create_all, so the schema has to be dropped first or alembic
+      # collides with tables it is trying to create.
+      - name: Migrations and seed must work from scratch
         run: |
+          PGPASSWORD=easyserve psql -h localhost -U easyserve -d easyserve_test \
+            -c 'DROP SCHEMA public CASCADE; CREATE SCHEMA public;'
           uv run alembic upgrade head
           uv run python seed.py
         working-directory: backend
