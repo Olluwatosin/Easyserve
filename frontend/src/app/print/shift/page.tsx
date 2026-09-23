@@ -62,12 +62,14 @@ function ShiftSheet() {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [tables, setTables] = useState<Table[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [clockCode, setClockCode] = useState<string | null>(null);
 
   useEffect(() => {
     Promise.all([
       api.get("/venues/me").then((r) => setVenue(r.data)).catch(() => {}),
       api.get("/staff").then((r) => setStaff(r.data)).catch(() => {}),
       api.get("/tables").then((r) => setTables(r.data)).catch(() => {}),
+      api.get("/shifts/code").then((r) => setClockCode(r.data.code)).catch(() => {}),
     ]).finally(() => setLoaded(true));
   }, []);
 
@@ -200,6 +202,29 @@ function ShiftSheet() {
             </div>
           )}
         </div>
+
+        {clockCode && (
+          <div
+            style={{
+              display: "flex", alignItems: "center", gap: 12,
+              border: "1.5px solid #111", borderRadius: 8,
+              padding: "10px 14px", margin: "12px 0 6px",
+            }}
+          >
+            <div>
+              <p style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: ".08em", color: "#666" }}>
+                Clock-in code
+              </p>
+              <p style={{ fontSize: 26, fontWeight: 700, letterSpacing: ".18em", lineHeight: 1.1 }}>
+                {clockCode}
+              </p>
+            </div>
+            <p style={{ fontSize: 11, color: "#555", flex: 1, lineHeight: 1.45 }}>
+              Enter this on your own screen to start a shift. It is how the venue
+              knows you were here — keep this sheet where only staff can read it.
+            </p>
+          </div>
+        )}
 
         <p style={{ fontSize: 11.5, color: "#555", margin: "10px 0 14px" }}>
           Staff sign in at <strong>{signInLink.replace(/^https?:\/\//, "") || "…"}</strong> and

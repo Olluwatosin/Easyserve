@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { ShiftControl } from "@/components/ShiftControl";
 import {
   ITEM_STATUS_LABEL,
   ORDER_STATUS_COLOR,
@@ -316,6 +317,7 @@ function StaffContent() {
         </div>
 
         <div className="flex items-center gap-3">
+          <ShiftControl />
           <div className="flex items-center gap-1.5">
             <span
               className="w-1.5 h-1.5 rounded-full bg-teal animate-status-blink"

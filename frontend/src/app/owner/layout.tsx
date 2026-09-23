@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BarChart3, LayoutDashboard, LogOut, Moon, Package, Settings, ShoppingBag, Table2, Tag, Users, UtensilsCrossed } from "lucide-react";
+import { Clock, BarChart3, LayoutDashboard, LogOut, Moon, Package, Settings, ShoppingBag, Table2, Tag, Users, UtensilsCrossed } from "lucide-react";
 import AuthGuard from "@/components/AuthGuard";
 import { EsLogo } from "@/components/EsLogo";
 import { useAuthStore } from "@/stores/auth";
@@ -17,6 +17,7 @@ const nav = [
   { href: "/owner/stock", label: "Stock", icon: Package },
   { href: "/owner/promos", label: "Promos", icon: Tag },
   { href: "/owner/staff", label: "Staff", icon: Users },
+  { href: "/owner/timesheet", label: "Hours", icon: Clock },
   { href: "/owner/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/owner/settings", label: "Settings", icon: Settings },
 ];
