@@ -10,13 +10,18 @@ from app.config import settings
 UPLOAD_DIR = Path(settings.STATIC_DIR) / "uploads"
 _ALLOWED_MIME = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 _MAX_BYTES = 5 * 1024 * 1024  # 5 MB
+# Menus are text. Anything much larger is a design file with the menu buried in
+# it, and refusing early beats timing out inside a parser.
+_MAX_IMPORT_BYTES = 4 * 1024 * 1024
 
 from app.database import get_db
 from app.dependencies import require_roles
 from app.models.menu_category import MenuCategory
 from app.models.menu_item import MenuItem
 from app.models.user import User
+from app.services import menu_import
 from app.schemas.menu import (
+    MenuImportCommit,
     CategoryCreate, CategoryResponse, CategoryUpdate,
     MenuItemCreate, MenuItemResponse, MenuItemUpdate,
 )
@@ -25,6 +30,115 @@ router = APIRouter(prefix="/menu", tags=["menu"])
 
 
 # ── Image upload ──────────────────────────────────────────────────────────────
+
+@router.post("/import/parse")
+async def parse_menu_file(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_roles("owner")),
+):
+    """Read a menu file and return what was found. Writes nothing.
+
+    Deliberately separate from committing. A parser that is right most of the
+    time saves a venue most of a day when a person checks it, and creates forty
+    plausible-looking wrong prices when it writes straight to the menu. So this
+    returns rows to look at, and `/import/commit` takes back only what was
+    approved.
+    """
+    contents = await file.read()
+    if len(contents) > _MAX_IMPORT_BYTES:
+        raise HTTPException(400, "That file is over 4 MB — is it the right one?")
+    if not contents:
+        raise HTTPException(400, "That file is empty")
+
+    try:
+        result = menu_import.parse(file.filename or "", contents)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except RuntimeError as exc:  # a parser's dependency is missing
+        raise HTTPException(503, str(exc))
+
+    if not result.items:
+        raise HTTPException(
+            400,
+            "No menu items could be read from that file. A CSV with Name and "
+            "Price columns imports exactly.",
+        )
+
+    return {
+        "source": result.source,
+        "items": [vars(i) for i in result.items],
+        "unreadable": result.unreadable[:40],
+        "needs_review": result.needs_review,
+    }
+
+
+@router.post("/import/commit")
+async def commit_menu_import(
+    req: MenuImportCommit,
+    current_user: User = Depends(require_roles("owner")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create the items a person has reviewed.
+
+    Skips names that already exist rather than failing the batch or creating a
+    second Star Lager — an import is usually run more than once while the menu
+    is still being settled.
+    """
+    existing = await db.execute(
+        select(MenuItem).where(MenuItem.venue_id == current_user.venue_id)
+    )
+    taken = {i.name.strip().lower() for i in existing.scalars().all()}
+
+    cats = await db.execute(
+        select(MenuCategory).where(MenuCategory.venue_id == current_user.venue_id)
+    )
+    by_name = {c.name.strip().lower(): c for c in cats.scalars().all()}
+
+    created, skipped = [], []
+    for row in req.items:
+        name = row.name.strip()
+        if not name:
+            continue
+        if name.lower() in taken:
+            skipped.append(name)
+            continue
+
+        category_id = None
+        if row.category:
+            key = row.category.strip().lower()
+            cat = by_name.get(key)
+            if cat is None:
+                cat = MenuCategory(
+                    id=str(_uuid.uuid4()),
+                    venue_id=current_user.venue_id,
+                    name=row.category.strip(),
+                )
+                db.add(cat)
+                await db.flush()
+                by_name[key] = cat
+            category_id = cat.id
+
+        item = MenuItem(
+            id=str(_uuid.uuid4()),
+            venue_id=current_user.venue_id,
+            category_id=category_id,
+            name=name,
+            price=row.price,
+            unit_cost=row.unit_cost,
+            item_type=row.item_type,
+        )
+        db.add(item)
+        taken.add(name.lower())
+        created.append(name)
+
+    await db.commit()
+    return {
+        "created": len(created),
+        "skipped": len(skipped),
+        "skipped_names": skipped[:20],
+        "categories": len(by_name),
+    }
+
 
 @router.post("/upload-image")
 async def upload_image(

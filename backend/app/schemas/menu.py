@@ -107,3 +107,28 @@ class PromoResponse(BaseModel):
     is_active: bool
 
     model_config = {"from_attributes": True}
+
+
+class ImportedItem(BaseModel):
+    """One row as a person approved it on the review screen."""
+    name: str
+    price: float
+    unit_cost: float | None = None
+    category: str | None = None
+    item_type: Literal["drink", "food", "other"] = "other"
+
+    def model_post_init(self, __context) -> None:
+        if not self.name.strip():
+            raise ValueError("An item needs a name")
+        if self.price <= 0:
+            raise ValueError(f"{self.name} has no price")
+
+
+class MenuImportCommit(BaseModel):
+    items: list[ImportedItem]
+
+    def model_post_init(self, __context) -> None:
+        if not self.items:
+            raise ValueError("Nothing was selected to import")
+        if len(self.items) > 500:
+            raise ValueError("That is more than 500 items — split the file")

@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
+import { MenuImport } from "@/components/MenuImport";
 import { formatNGN } from "@/lib/utils";
-import { Camera, Plus, Edit2, Trash2, ToggleLeft, ToggleRight, GripVertical, X } from "lucide-react";
+import { Camera, FileUp, Plus, Edit2, Trash2, ToggleLeft, ToggleRight, GripVertical, X } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface Category { id: string; name: string; sort_order: number; }
@@ -33,6 +34,7 @@ export default function MenuPage() {
     category_id: "", image_url: "",
   });
   const [uploading, setUploading] = useState(false);
+  const [importing, setImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // category form state
@@ -177,6 +179,10 @@ export default function MenuPage() {
 
   return (
     <div>
+      {importing && (
+        <MenuImport onClose={() => setImporting(false)} onImported={load} />
+      )}
+
       {/* ── Header ── */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -191,9 +197,22 @@ export default function MenuPage() {
               <Plus size={16} /> New Category
             </button>
           ) : (
-            <button onClick={openAddItem} className="btn-teal flex items-center gap-2">
-              <Plus size={16} /> Add Item
-            </button>
+            <>
+              <button
+                onClick={() => setImporting(true)}
+                className="px-4 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2"
+                style={{
+                  background: "rgba(0,212,180,0.1)",
+                  border: "1px solid rgba(0,212,180,0.32)",
+                  color: "var(--teal)",
+                }}
+              >
+                <FileUp size={16} /> Import
+              </button>
+              <button onClick={openAddItem} className="btn-teal flex items-center gap-2">
+                <Plus size={16} /> Add Item
+              </button>
+            </>
           )}
         </div>
       </div>

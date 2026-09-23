@@ -29,6 +29,11 @@ dependencies = [
     "pytz==2024.1",
     "slowapi==0.1.9",
     "sentry-sdk[fastapi]>=2.0",
+    # Reading a venue's existing menu out of whatever it arrives in. Both are
+    # pure Python with no system libraries, so they add nothing to the deploy
+    # image beyond themselves.
+    "python-docx==1.1.2",
+    "pypdf==4.2.0",
 ]
 
 [dependency-groups]
