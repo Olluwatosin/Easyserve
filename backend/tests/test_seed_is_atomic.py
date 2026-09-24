@@ -1,4 +1,9 @@
-"""The demo reset must not be able to destroy what it cannot rebuild.
+"""The demo reset: what it must not destroy, and what it must not change.
+
+Both halves live here because both drive `seed()`, and two test modules calling
+it bind SQLAlchemy's async engine to two different event loops.
+
+**What it must not destroy.**
 
 `seed.py` deletes every row in every table and then recreates the venue. The
 wipe used to commit on its own, so anything that failed afterwards left the
@@ -9,10 +14,13 @@ somebody looked.
 
 Tests were green the whole time, because nothing ran the seed.
 
-So two things are pinned here. The whole reset is one transaction, proved by
-breaking it deliberately and checking the old data survived. And the script
-refuses to run anywhere that is not a demo or a developer's machine, because
-"deletes every row in every table" is a sentence that should need permission.
+So the whole reset is one transaction, proved by breaking it deliberately and
+checking the old data survived — and the script refuses to run anywhere that is
+not a demo or a developer's machine, because "deletes every row in every table"
+is a sentence that should need permission.
+
+**What it must not change.** A table's QR token, which is printed and stuck to
+furniture. See the second half of this file.
 """
 import os
 import uuid
@@ -132,3 +140,71 @@ async def test_a_failure_part_way_through_leaves_the_old_data(monkeypatch):
         "is exactly the outage this exists to prevent"
     )
     assert after.id == original_id, "the surviving venue is not the original one"
+
+
+# ── QR codes are printed and stuck to furniture ──────────────────────────────
+#
+# The seed minted a fresh token for every table on every run, and the demo
+# reseeds hourly — so every code anybody had scanned, screenshotted or printed
+# died within the hour. The symptom is the worst kind: a guest reads "could not
+# load menu" while the API returns 200, CORS is correct, the page loads, and
+# every health check says the system is fine.
+#
+# On the demo that is an annoyance. At a venue it is two hundred dead stickers
+# at once, found by guests, on a night nobody can reprint anything.
+
+
+async def _tokens_by_label() -> dict[str, str]:
+    from sqlalchemy import select
+
+    from app.database import AsyncSessionLocal
+    from app.models.table import Table
+
+    async with AsyncSessionLocal() as db:
+        rows = await db.execute(select(Table.label, Table.qr_token))
+        return {label: token for label, token in rows.all()}
+
+
+async def test_a_printed_qr_still_works_after_a_reset(monkeypatch):
+    """The bug, reproduced. Reseed and every sticker must still point at its
+    own table."""
+    import seed as seed_module
+
+    monkeypatch.setenv("ENVIRONMENT", "test")
+
+    await seed_module.seed()
+    before = await _tokens_by_label()
+    assert before, "the seed produced no tables to check"
+
+    await seed_module.seed()
+    after = await _tokens_by_label()
+
+    assert set(before) == set(after), "the reset changed which tables exist"
+    for label, token in before.items():
+        assert after[label] == token, (
+            f"the QR code on {label} changed — every sticker for that table is "
+            "now dead, and the only symptom a guest sees is 'could not load menu'"
+        )
+
+
+async def test_a_fresh_venue_still_gets_codes(monkeypatch):
+    """Preserving must not mean failing to issue one in the first place."""
+    import seed as seed_module
+
+    monkeypatch.setenv("ENVIRONMENT", "test")
+    await seed_module.seed()
+
+    tokens = await _tokens_by_label()
+    assert all(tokens.values()), "a table was seeded without a QR token"
+    assert len(set(tokens.values())) == len(tokens), "two tables share one code"
+
+
+async def test_the_api_never_rewrites_a_token():
+    """The other way a sticker could die. Editing a table — renaming it,
+    re-zoning it, changing its minimum spend — must leave the code alone."""
+    from app.schemas.table import TableUpdate
+
+    assert "qr_token" not in TableUpdate.model_fields, (
+        "a table update can change the QR token, so renaming a table would "
+        "silently kill its sticker"
+    )

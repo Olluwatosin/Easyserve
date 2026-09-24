@@ -182,8 +182,28 @@ async def seed():
 
         # ── Venue + owner ────────────────────────────────────────────────────
         existing = await db.execute(select(Venue).where(Venue.slug == "the-grand-noir"))
-        if existing.scalar_one_or_none():
+        current_venue = existing.scalar_one_or_none()
+        preserved_qr: dict[str, str] = {}
+
+        if current_venue is not None:
             print("Seed already exists — clearing and re-seeding...")
+
+            # A table's QR token is printed and stuck to furniture. Minting a
+            # new one on every reset silently killed every code anybody had
+            # scanned, screenshotted or printed — and the only symptom is a
+            # guest reading "could not load menu" while every health check says
+            # the system is fine. Carried across by label so a sticker printed
+            # last week still works after tonight's reset.
+            from app.models.table import Table as _Table
+
+            old = await db.execute(
+                select(_Table.label, _Table.qr_token).where(
+                    _Table.venue_id == current_venue.id
+                )
+            )
+            preserved_qr = {label: token for label, token in old.all()}
+            print(f"Keeping {len(preserved_qr)} QR code(s) alive.")
+
             from sqlalchemy import text
             # Child tables first: the deletes have to respect foreign keys in
             # the same order whether or not they are committed separately.
@@ -245,7 +265,9 @@ async def seed():
                 label=label,
                 capacity=capacity,
                 zone=zone,
-                qr_token=nid(),
+                # Reuse the code already on the table where there is one, so a
+                # sticker printed last week still works after a reset.
+                qr_token=preserved_qr.get(label) or nid(),
                 # Amara covers VIP and the main floor; the terrace and bar are
                 # uncovered, which is normal and exercises both routing paths —
                 # an alert aimed at one attendant, and one that opens to the

@@ -223,6 +223,7 @@ export default function CustomerMenuPage({
 }) {
   const { qr_token } = params;
   const [menu, setMenu] = useState<MenuData | null>(null);
+  const [deadCode, setDeadCode] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
@@ -276,8 +277,43 @@ export default function CustomerMenuPage({
         setMenu(r.data);
         if (r.data.categories.length > 0) setActiveCategory(r.data.categories[0].id);
       })
-      .catch(() => toast.error("Could not load menu"));
+      .catch((err) => {
+        // A dead code and a dropped network are different problems with
+        // different answers, and "could not load menu" sends a guest to find
+        // staff who cannot help. A 404 means this sticker no longer matches a
+        // table — the only person who can fix that is someone who works here.
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        if (status === 404) {
+          setDeadCode(true);
+        } else {
+          toast.error("Could not load the menu — check your connection");
+        }
+      });
   }, [qr_token]);
+
+  if (deadCode) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center p-6"
+        style={{ background: "var(--bg)" }}
+      >
+        <div className="max-w-xs text-center">
+          <p className="text-4xl mb-4">🔖</p>
+          <h1
+            className="font-display text-xl font-bold mb-2"
+            style={{ color: "var(--text)" }}
+          >
+            This code is out of date
+          </h1>
+          <p className="text-sm leading-relaxed" style={{ color: "var(--muted)" }}>
+            The sticker on this table is no longer linked to it. Please ask a
+            member of staff — they can bring you a current one, or take your
+            order directly.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const cartTotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
   const cartCount = cart.reduce((s, i) => s + i.quantity, 0);
