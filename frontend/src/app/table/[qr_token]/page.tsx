@@ -5,7 +5,7 @@ import Image from "next/image";
 import { publicApi as api } from "@/lib/publicApi";
 import { useOrderStore } from "@/stores/order";
 import { formatNGN } from "@/lib/utils";
-import { Plus, Minus, Bell, X, Tag, ChevronRight, Check } from "lucide-react";
+import { Plus, Minus, Bell, X, Tag, ChevronRight, Check, Receipt } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { newRequestId } from "@/lib/offline";
@@ -40,11 +40,20 @@ interface Suggestion {
   qty: number;
 }
 
+interface VisitSummary {
+  orders: number;
+  items: number;
+  total: number;
+  /** Everything on this session has been paid for, so the visit is over. */
+  settled: boolean;
+}
+
 interface MenuData {
   venue_name: string;
   table_label: string;
   categories: Category[];
   suggestions?: Suggestion[];
+  session?: VisitSummary;
   active_promos: unknown[];
 }
 
@@ -234,13 +243,20 @@ export default function CustomerMenuPage({
   const [orderSent, setOrderSent] = useState(false);
   const [guestPhone, setGuestPhone] = useState("");
 
+  // Read on mount rather than during render: the server has no localStorage, so
+  // initialising from it here would hydrate to a different value than it
+  // rendered.
+  const [session, setSession] = useState("");
+  useEffect(() => setSession(openSession(qr_token)), [qr_token]);
+
+
   // Remember the guest's phone across visits (loyalty recognition)
 
   // The guest already has a session; connecting it here means "notified" can be
   // followed by "Amara is on her way" instead of silence, which is what makes
   // people give up and shout.
   useEffect(() => {
-    const token = sessionToken.current;
+    const token = session;
     if (!token) return;
     let ws: WebSocket | null = null;
     try {
@@ -260,7 +276,7 @@ export default function CustomerMenuPage({
       /* no socket — the alert still reaches staff over HTTP */
     }
     return () => ws?.close();
-  }, []);
+  }, [session]);
 
   useEffect(() => {
     const saved = localStorage.getItem("guest_phone");
@@ -268,13 +284,20 @@ export default function CustomerMenuPage({
   }, []);
   const { cart, addToCart, updateQuantity, clearCart } = useOrderStore();
   const router = useRouter();
-  const sessionToken = useRef(getOrCreateSession());
 
   useEffect(() => {
-    const qs = sessionToken.current ? `?session_token=${sessionToken.current}` : "";
+    if (!session) return;
     api
-      .get(`/customer/menu/${qr_token}${qs}`)
+      .get(`/customer/menu/${qr_token}?session_token=${session}`)
       .then((r) => {
+        // The last visit at this table was paid off, so this scan is a new one.
+        // Starting the new token here — rather than on payment — is what makes
+        // it work when the guest paid at the bar, or on a different phone, or
+        // closed the tab before the confirmation landed.
+        if (r.data.session?.settled) {
+          setSession(mintSession(qr_token));
+          return;
+        }
         setMenu(r.data);
         if (r.data.categories.length > 0) setActiveCategory(r.data.categories[0].id);
       })
@@ -290,7 +313,7 @@ export default function CustomerMenuPage({
           toast.error("Could not load the menu — check your connection");
         }
       });
-  }, [qr_token]);
+  }, [qr_token, session]);
 
   if (deadCode) {
     return (
@@ -334,7 +357,7 @@ export default function CustomerMenuPage({
         label: `Order for ${cart.length} item${cart.length === 1 ? "" : "s"}`,
         body: {
           client_request_id: clientRequestId,
-          session_token: sessionToken.current,
+          session_token: session,
           customer_phone: guestPhone || null,
           items: cart.map((c) => ({
             menu_item_id: c.menu_item_id,
@@ -360,6 +383,26 @@ export default function CustomerMenuPage({
         hadDrinks && hadFood ? "both" : hadFood ? "kitchen" : hadDrinks ? "bar" : "none",
       );
 
+      // Fold this round into the visit line rather than re-fetching the menu
+      // for it. The figure is the guest's own order, placed a second ago, so
+      // there is nothing to reconcile with the server — and a queued offline
+      // order has no server total to ask for yet anyway.
+      const placedItems = cart.reduce((n, i) => n + i.quantity, 0);
+      const placedTotal = cart.reduce((n, i) => n + i.price * i.quantity, 0);
+      setMenu((m) =>
+        m
+          ? {
+              ...m,
+              session: {
+                orders: (m.session?.orders ?? 0) + 1,
+                items: (m.session?.items ?? 0) + placedItems,
+                total: (m.session?.total ?? 0) + placedTotal,
+                settled: false,
+              },
+            }
+          : m,
+      );
+
       clearCart();
       setOrderSent(true);
       if (queued) {
@@ -379,7 +422,7 @@ export default function CustomerMenuPage({
         url: `/customer/alerts/${qr_token}`,
         kind: "alert",
         label: ALERT_OPTIONS.find((o) => o.type === type)?.label ?? "Call attendant",
-        body: { type, session_token: sessionToken.current },
+        body: { type, session_token: session },
       });
       setAlertStatus("sent");
       toast.success("Sent — someone will come over");
@@ -535,6 +578,33 @@ export default function CustomerMenuPage({
           })}
         </div>
       </div>
+
+      {/* ── What this visit has run up already ──
+          One line, not a receipt. The rounds already placed are real and a
+          guest should be able to see what they are into, but reprinting them
+          above the menu buries the thing the screen is for — ordering the next
+          one. The detail is a tap away. */}
+      {menu.session && menu.session.orders > 0 && (
+        <button
+          onClick={() => router.push(`/bill/${session}`)}
+          className="mx-4 mt-4 w-[calc(100%-2rem)] flex items-center gap-2.5 px-4 py-3 rounded-2xl text-xs animate-fade-in"
+          style={{
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            color: "var(--text-soft)",
+          }}
+        >
+          <Receipt size={14} style={{ color: "var(--muted)", flexShrink: 0 }} />
+          <span className="font-medium">Earlier this visit</span>
+          <span style={{ color: "var(--muted)" }}>
+            {menu.session.items} item{menu.session.items === 1 ? "" : "s"}
+          </span>
+          <span className="font-semibold tabular-nums ml-auto">
+            {formatNGN(menu.session.total)}
+          </span>
+          <ChevronRight size={14} style={{ color: "var(--muted)", flexShrink: 0 }} />
+        </button>
+      )}
 
       {/* ── Re-order suggestions strip ── */}
       {menu.suggestions && menu.suggestions.length > 0 && (
@@ -999,7 +1069,7 @@ export default function CustomerMenuPage({
                   Add More Items
                 </button>
                 <button
-                  onClick={() => router.push(`/bill/${sessionToken.current}`)}
+                  onClick={() => router.push(`/bill/${session}`)}
                   className="btn-outline w-full"
                 >
                   View My Bill
@@ -1150,14 +1220,62 @@ export default function CustomerMenuPage({
   );
 }
 
-// ── Session helper ────────────────────────────────────────────────────────────
+// ── Sessions: one per table, one per visit ───────────────────────────────────
+//
+// A session token is what ties a guest's phone to a bill. It used to be a
+// single value under one key, minted once and never cleared, which was wrong in
+// two ways that both showed up as "the order screen keeps growing".
+//
+// **It was shared across tables.** One phone scanning table 3 and later table 7
+// put both tables' rounds on one bill. Not mess — a wrong bill.
+//
+// **It never ended.** Nothing cleared it, so the visit after the one you paid
+// for opened on top of the last one, and the one after that on top of both.
+// Eventually a guest sits down to a receipt for a night they have gone home
+// from. Keying per table fixes the first; the other two rules below end a visit:
+//
+// * the venue's business day rolled over (6AM, same boundary as everything
+//   else), so anything still open belongs to a night that is over;
+// * everything on the session has been paid for, which the menu response
+//   reports back as `settled`. That is the real end of a visit, and it is the
+//   server's call rather than the phone's — the phone does not know whether
+//   somebody settled at the bar.
 
-function getOrCreateSession(): string {
-  if (typeof window === "undefined") return "";
-  let s = localStorage.getItem("session_token");
-  if (!s) {
-    s = crypto.randomUUID();
-    localStorage.setItem("session_token", s);
+const SESSION_PREFIX = "es_session:";
+
+/** Tonight's date at the venue. Before 6AM that is still yesterday. */
+function businessNight(): string {
+  const d = new Date();
+  d.setHours(d.getHours() - 6);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+function mintSession(qr: string): string {
+  const token = crypto.randomUUID();
+  try {
+    localStorage.setItem(
+      SESSION_PREFIX + qr,
+      JSON.stringify({ token, night: businessNight() }),
+    );
+  } catch {
+    // Private browsing, or storage full. The visit still works — it just will
+    // not survive a reload, which is better than refusing to take an order.
   }
-  return s;
+  return token;
+}
+
+/** The token for this table's current visit, starting a new one if the last
+ *  belongs to a night that is over. */
+function openSession(qr: string): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const raw = localStorage.getItem(SESSION_PREFIX + qr);
+    if (raw) {
+      const saved = JSON.parse(raw) as { token?: string; night?: string };
+      if (saved.token && saved.night === businessNight()) return saved.token;
+    }
+  } catch {
+    /* unreadable or from an older shape — start clean */
+  }
+  return mintSession(qr);
 }

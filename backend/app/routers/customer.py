@@ -92,10 +92,14 @@ async def get_menu(qr_token: str, session_token: str | None = None, db: AsyncSes
     response = await _build_menu_response(db, venue, table)
 
     if session_token:
+        # Scoped to this venue as well as this session. A guest's phone keeps
+        # one token, so without the venue clause a bill could carry rounds
+        # bought somewhere else entirely — unlikely with one venue, a privacy
+        # problem the day there are two.
         prev = await db.execute(
             select(OrderItem.name, OrderItem.menu_item_id, func.sum(OrderItem.quantity).label("qty"))
             .join(Order, Order.id == OrderItem.order_id)
-            .where(Order.session_token == session_token)
+            .where(Order.session_token == session_token, Order.venue_id == venue.id)
             .group_by(OrderItem.menu_item_id, OrderItem.name)
             .order_by(func.sum(OrderItem.quantity).desc())
             .limit(3)
@@ -104,6 +108,33 @@ async def get_menu(qr_token: str, session_token: str | None = None, db: AsyncSes
             {"menu_item_id": str(r.menu_item_id), "name": r.name, "qty": int(r.qty)}
             for r in prev.all()
         ]
+
+        # What this visit has run up so far, and whether it is finished.
+        #
+        # A phone keeps its session token, so without something to say "that
+        # visit is over" the next scan reopens the last one and the bill grows
+        # for ever — across parties, and eventually across nights. The page uses
+        # `settled` to start a clean visit, and the summary to show a single
+        # line rather than a receipt on top of the menu.
+        live = await db.execute(
+            select(Order)
+            .where(Order.session_token == session_token, Order.venue_id == venue.id)
+            .options(selectinload(Order.items))
+        )
+        orders = list(live.scalars().all())
+        open_orders = [o for o in orders if o.status not in ("paid", "cancelled")]
+        response["session"] = {
+            "orders": len(orders),
+            # Drinks, not order lines. Four shots on one line is four items to
+            # the guest reading this, and a cancelled one is none.
+            "items": sum(
+                i.quantity for o in orders for i in o.items if i.status != "cancelled"
+            ),
+            "total": round(sum(float(o.grand_total or 0) for o in orders), 2),
+            # Everything bought has been paid for: this party is done, and the
+            # next person to scan this table should start with a clean bill.
+            "settled": bool(orders) and not open_orders,
+        }
 
     return response
 

@@ -497,19 +497,40 @@ export default function BillPage({
             {/* QR code */}
             {exitPass.status === "valid" && (
               <div className="p-6 flex flex-col items-center gap-4">
+                {/* Two things about this code are deliberate, because the
+                    first build of it got both wrong and security could not
+                    scan a single pass at the door.
+
+                    **It is dark on white.** It used to be teal on navy, which
+                    matches the rest of the page and is an *inverted* QR —
+                    scanners look for a dark pattern on a light field, and most
+                    decoders (html5-qrcode and ZXing included) will not try the
+                    other polarity. It looked like a QR code to a person and was
+                    not one to a camera.
+
+                    **It carries the short code, not the token.** The token is
+                    171 characters, which packs into a grid so fine that on a
+                    phone screen, at an angle, under a door light, there is not
+                    enough contrast per module to resolve. Six characters fit in
+                    the smallest grid there is, at the highest error correction,
+                    so it survives a cracked screen and a smeared lens. The
+                    token is not a secret being protected by length here — the
+                    scan is authenticated by the guard's own login, and the pass
+                    dies on first use. */}
                 <div
                   className="p-4 rounded-2xl animate-glow-teal"
                   style={{
-                    background: "#1A2535",
+                    background: "#FFFFFF",
                     border: "1px solid rgba(0,212,180,0.3)",
                   }}
                 >
                   <QRCodeSVG
-                    value={exitPass.token}
+                    value={exitPass.short_code ?? exitPass.token}
                     size={180}
-                    bgColor="#1A2535"
-                    fgColor="#00D4B4"
-                    level="M"
+                    bgColor="#FFFFFF"
+                    fgColor="#0A1420"
+                    marginSize={2}
+                    level="H"
                   />
                 </div>
                 {/* The typable half. A camera fails on a cracked screen, at a

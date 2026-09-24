@@ -21,6 +21,7 @@ async def get_pass(
         "id": ep.id,
         "order_id": ep.order_id,
         "token": ep.token,
+        "short_code": ep.short_code,
         "expires_at": ep.expires_at,
         "used_at": ep.used_at,
         "status": ep.status,

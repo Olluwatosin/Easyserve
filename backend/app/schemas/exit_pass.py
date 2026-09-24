@@ -6,6 +6,9 @@ class ExitPassResponse(BaseModel):
     id: str
     order_id: str
     token: str
+    #: The six characters a guard can type. Nullable only for passes issued
+    #: before short codes existed.
+    short_code: str | None = None
     expires_at: datetime
     used_at: datetime | None
     status: str

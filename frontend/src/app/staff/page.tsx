@@ -15,6 +15,7 @@ import { useVenueChannel } from "@/lib/venueChannel";
 import { groupOpenByTable, runningFor, walkOrder, type TableLive } from "@/lib/tableLive";
 import { TakeOrderSheet } from "@/components/TakeOrderSheet";
 import { useAuthStore } from "@/stores/auth";
+import { Summons, type SummonsData } from "@/components/Summons";
 import AuthGuard from "@/components/AuthGuard";
 import { formatNGN, timeAgo } from "@/lib/utils";
 import { Bell, BellRing, CheckCircle, ChefHat, Clock, LogOut, Plus, Wallet, Wine } from "lucide-react";
@@ -28,6 +29,12 @@ import {
   unlock,
 } from "@/lib/alertSound";
 import { useRouter } from "next/navigation";
+
+/** Socket frames are `Record<string, unknown>`; this reads one field as text
+ *  without pretending the wire guarantees a shape. */
+function str(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
 
 interface Alert {
   acknowledged_by: string | null;
@@ -94,6 +101,11 @@ function StaffContent() {
   }, [soundOn]);
   const [tableSheet, setTableSheet] = useState<string | null>(null);
   const [taking, setTaking] = useState(false);
+  // A table calling for this attendant takes the whole screen. It used to be a
+  // toast, which is what got missed on the floor — see Summons for why the
+  // sound cannot be the thing that carries it.
+  const [summons, setSummons] = useState<SummonsData | null>(null);
+
   const [buzz, setBuzz] = useState<{
     message: string;
     type: "bar" | "kitchen";
@@ -147,18 +159,26 @@ function StaffContent() {
         const mine = !d?.assigned_to || d.assigned_to === user?.id;
         if (!mine) return;
         playNewAlert();
-        toast(`${d?.table_label ?? "A table"} needs you`, {
-          icon: "🔔",
-          duration: 8000,
+        setSummons({
+          alertId: str(d?.alert_id),
+          type: str(d?.type) || "call_attendant",
+          tableLabel: str(d?.table_label) || "A table",
+          zone: str(d?.zone) || null,
+          escalated: false,
         });
       },
       alert_escalated: (d) => {
-        // Nobody answered in time, so this is now everyone's problem.
+        // Nobody answered in time, so this is now everyone's problem — it goes
+        // up on every attendant's screen, not just the one it was assigned to.
         playEscalation();
-        toast(
-          `${d?.table_label ?? "A table"} still waiting — ${d?.waiting_seconds ?? 0}s`,
-          { icon: "⏰", duration: 10000 },
-        );
+        setSummons({
+          alertId: str(d?.alert_id),
+          type: str(d?.type) || "call_attendant",
+          tableLabel: str(d?.table_label) || "A table",
+          zone: str(d?.zone) || null,
+          escalated: true,
+          waitingSeconds: Number(d?.waiting_seconds) || undefined,
+        });
       },
       alert_acknowledged: (d) => {
         if (!d?.acknowledged_by || d.acknowledged_by === user?.id) return;
@@ -265,6 +285,20 @@ function StaffContent() {
   return (
     <div className="min-h-screen" style={{ background: "var(--bg)" }}>
       <ConnectionBanner status={wsStatus} />
+
+      {summons && (
+        <Summons
+          data={summons}
+          onAccept={() => {
+            // Acknowledging is what stops the guest's phone waiting and tells
+            // them somebody is coming, so it happens here rather than when the
+            // attendant eventually reaches the table.
+            if (summons.alertId) ackAlert(summons.alertId);
+            setSummons(null);
+          }}
+          onDismiss={() => setSummons(null)}
+        />
+      )}
 
       {/* ── Buzz banner ── */}
       {buzz && (

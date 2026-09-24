@@ -89,7 +89,15 @@ function SecurityContent() {
       html5Qrcode
         .start(
           { facingMode: "environment" },
-          { fps: 10, qrbox: { width: 250, height: 250 } },
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            // The browser's own decoder where there is one. It is faster and
+            // more forgiving of a phone screen held at an angle than the
+            // JavaScript fallback, which matters because this is used one-handed
+            // at a door in the dark.
+            experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+          },
           (decodedText: string) => {
             html5Qrcode?.stop();
             setScanning(false);
