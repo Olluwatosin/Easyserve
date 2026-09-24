@@ -25,7 +25,10 @@ export const ORDER_STATUS_COLOR: Record<string, string> = {
 };
 
 export const ITEM_STATUS_LABEL: Record<string, string> = {
-  pending: "Sent to bar/kitchen",
+  // Station-neutral on purpose: this label is shown on staff screens that
+  // already know which station they are, so naming the wrong one would be
+  // worse than naming neither.
+  pending: "Sent",
   preparing: "Being prepared",
   ready: "Ready to serve",
   delivered: "Served",

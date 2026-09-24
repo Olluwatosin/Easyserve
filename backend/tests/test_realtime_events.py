@@ -121,3 +121,37 @@ def test_prep_minutes_reach_the_guest_without_a_second_request():
     src = (BACKEND / "routers" / "customer.py").read_text()
     assert "prep_minutes" in src
     assert "drink_prep_minutes" in src and "food_prep_minutes" in src
+
+
+# ── Where an item is sent ────────────────────────────────────────────────────
+
+def test_a_drink_goes_to_the_bar_and_food_to_the_kitchen():
+    """Reported from the floor: a guest ordered Hennessy XO and the screen said
+    "Sent to kitchen". The routing was right — the confirmation was hardcoded —
+    but this is cheap insurance on the half that would be expensive to get
+    wrong, because a misrouted ticket is a drink nobody pours."""
+    from app.services.routing_service import determine_route
+
+    assert determine_route("drink") == "bar"
+    assert determine_route("food") == "kitchen"
+    # Anything else belongs to neither and must not land on a station screen
+    # where it would sit unmade all night.
+    assert determine_route("other") == "none"
+
+
+def test_the_guest_is_told_where_their_order_actually_went():
+    """The bug itself. The confirmation said "Sent to kitchen!" for every order,
+    so a guest ordering only drinks was told their cognac went to the kitchen."""
+    from pathlib import Path
+
+    page = (
+        Path(__file__).resolve().parent.parent.parent
+        / "frontend" / "src" / "app" / "table" / "[qr_token]" / "page.tsx"
+    ).read_text()
+
+    assert "Sent to the bar!" in page
+    assert "Sent to the bar and kitchen!" in page
+    # The hardcoded version must be gone, not merely joined by the others.
+    assert "Sent to kitchen!" not in page, (
+        "the confirmation still names the kitchen regardless of what was ordered"
+    )

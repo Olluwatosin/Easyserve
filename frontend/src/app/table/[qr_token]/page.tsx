@@ -224,6 +224,7 @@ export default function CustomerMenuPage({
   const { qr_token } = params;
   const [menu, setMenu] = useState<MenuData | null>(null);
   const [deadCode, setDeadCode] = useState(false);
+  const [sentTo, setSentTo] = useState<"bar" | "kitchen" | "both" | "none">("none");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [alertOpen, setAlertOpen] = useState(false);
@@ -348,6 +349,16 @@ export default function CustomerMenuPage({
         toast.error(detail?.detail ?? "Failed to place order");
         return;
       }
+
+      // Captured before the cart is cleared. The confirmation used to name the
+      // kitchen for every order, so a guest ordering a cognac was told their
+      // drink had gone to be cooked. Small, and it undermines the one thing
+      // that screen exists to do: say the order reached somewhere sensible.
+      const hadDrinks = cart.some((i) => i.item_type === "drink");
+      const hadFood = cart.some((i) => i.item_type === "food");
+      setSentTo(
+        hadDrinks && hadFood ? "both" : hadFood ? "kitchen" : hadDrinks ? "bar" : "none",
+      );
 
       clearCart();
       setOrderSent(true);
@@ -964,10 +975,18 @@ export default function CustomerMenuPage({
                     <Check size={22} style={{ color: "var(--teal)" }} />
                   </div>
                   <p className="font-display font-bold text-base mb-1" style={{ color: "var(--teal)" }}>
-                    Sent to kitchen!
+                    {sentTo === "both"
+                      ? "Sent to the bar and kitchen!"
+                      : sentTo === "kitchen"
+                        ? "Sent to the kitchen!"
+                        : sentTo === "bar"
+                          ? "Sent to the bar!"
+                          : "Order sent!"}
                   </p>
                   <p className="text-xs" style={{ color: "var(--muted)" }}>
-                    Your order is being prepared
+                    {sentTo === "kitchen" || sentTo === "both"
+                      ? "Your order is being prepared"
+                      : "Your drinks are being poured"}
                   </p>
                 </div>
                 <button

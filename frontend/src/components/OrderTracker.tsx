@@ -37,7 +37,11 @@ export interface TrackedItem {
 const STEPS = ["pending", "preparing", "ready", "delivered"] as const;
 
 const COPY: Record<string, { label: string; hint: string }> = {
-  pending: { label: "Sent", hint: "The bar has your order" },
+  // The hint for `pending` is filled in per item below — a plate of suya has
+  // not gone to the bar, and telling a guest it has is the same small wrongness
+  // as the confirmation screen that thanked them for sending a cognac to the
+  // kitchen.
+  pending: { label: "Sent", hint: "" },
   preparing: { label: "Being made", hint: "" },
   ready: { label: "Ready", hint: "Coming to your table" },
   delivered: { label: "Served", hint: "" },
@@ -95,6 +99,12 @@ export function OrderTracker({ items }: { items: TrackedItem[] }) {
       {active.map((item) => {
         const idx = STEPS.indexOf(item.status as (typeof STEPS)[number]);
         const copy = COPY[item.status] ?? COPY.pending;
+        const hint =
+          item.status === "pending"
+            ? item.item_type === "food"
+              ? "The kitchen has it"
+              : "The bar has it"
+            : copy.hint;
         const done = item.status === "delivered";
         const ready = item.status === "ready";
 
@@ -147,9 +157,9 @@ export function OrderTracker({ items }: { items: TrackedItem[] }) {
               <span className="text-xs font-medium" style={{ color: accent }}>
                 {copy.label}
               </span>
-              {copy.hint && (
+              {hint && (
                 <span className="text-xs" style={{ color: "var(--muted)" }}>
-                  · {copy.hint}
+                  · {hint}
                 </span>
               )}
               {item.status === "pending" && (
