@@ -55,6 +55,15 @@ class ResetPasswordRequest(BaseModel):
     phone: str | None = None
 
 
+class SetStaffPasswordRequest(BaseModel):
+    """Leave `password` empty to have one generated.
+
+    A password picked in a hurry on somebody else's behalf is usually
+    "Password1", so the generated one is the default rather than the fallback.
+    """
+    password: str | None = None
+
+
 class SetPhoneRequest(BaseModel):
     phone: str
 

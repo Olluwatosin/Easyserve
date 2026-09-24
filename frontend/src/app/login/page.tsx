@@ -310,7 +310,27 @@ export default function LoginPage() {
             </button>
           </form>
 
-            <p className="text-center text-xs mt-6" style={{ color: "var(--muted)" }}>
+            {/* Both doors are open — staff have a password and a PIN — but
+                neither page used to mention the other, so whichever one a
+                person landed on looked like the only way in. On a floor the
+                keypad is the right door: nobody types an email at 11pm on a
+                shared phone. */}
+            <div
+              className="mt-6 rounded-xl px-4 py-3 text-center"
+              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid #1E2D42" }}
+            >
+              <p className="text-xs" style={{ color: "var(--muted)" }}>
+                Working a station tonight?
+              </p>
+              <a
+                href="/pin-login"
+                className="text-teal hover:underline font-semibold text-sm"
+              >
+                Sign in with your 4-digit PIN →
+              </a>
+            </div>
+
+            <p className="text-center text-xs mt-5" style={{ color: "var(--muted)" }}>
               New venue?{" "}
               <a href="/register" className="text-teal hover:underline font-medium">
                 Register here

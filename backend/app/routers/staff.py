@@ -8,9 +8,12 @@ from app.database import get_db
 from app.dependencies import require_roles
 from app.models.user import User
 from app.schemas.auth import UserResponse
-from app.schemas.auth import SetPinRequest
+from app.schemas.auth import SetPinRequest, SetStaffPasswordRequest
 from app.services.whatsapp_service import normalise_phone
-from app.utils.security import hash_password
+from datetime import datetime, timezone
+
+from app.services.audit_service import log_action
+from app.utils.security import generate_readable_password, hash_password
 
 router = APIRouter(prefix="/staff", tags=["staff"])
 
@@ -101,6 +104,63 @@ async def set_staff_pin(
         raise HTTPException(status_code=404, detail="Staff member not found")
     user.pin_hash = hash_password(req.pin)
     await db.commit()
+
+
+@router.patch("/{user_id}/password")
+async def set_staff_password(
+    user_id: str,
+    req: SetStaffPasswordRequest,
+    current_user: User = Depends(require_roles("owner")),
+    db: AsyncSession = Depends(get_db),
+):
+    """Give a staff member a new password, and hand it back once.
+
+    A password was set when the account was created and then became
+    unrecoverable: hashed, correctly, with nothing anywhere able to say what it
+    was. So the owner could neither tell a staff member their password nor
+    change it — the email door existed and nobody could open it.
+
+    The new password is returned in this response and never again, which is the
+    same bargain as the PIN. Generated here when none is supplied, because a
+    password chosen in a hurry for somebody else is usually "Password1".
+    """
+    result = await db.execute(
+        select(User).where(User.id == user_id, User.venue_id == current_user.venue_id)
+    )
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+    if user.id == current_user.id:
+        # An owner changing their own password goes through the flow that asks
+        # for the current one; this endpoint deliberately does not.
+        raise HTTPException(
+            status_code=400,
+            detail="Use Settings to change your own password",
+        )
+
+    password = (req.password or "").strip() or generate_readable_password()
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+
+    user.password_hash = hash_password(password)
+    # Anything signed in on the old password stops being signed in.
+    user.tokens_valid_after = datetime.now(timezone.utc)
+
+    log_action(
+        db,
+        venue_id=current_user.venue_id,
+        actor_id=current_user.id,
+        action="staff_password_reset",
+        entity_type="user",
+        entity_id=user.id,
+        details={"staff": user.full_name},
+    )
+    await db.commit()
+    return {
+        "password": password,
+        "full_name": user.full_name,
+        "email": user.email,
+    }
 
 
 @router.delete("/{user_id}", status_code=204)

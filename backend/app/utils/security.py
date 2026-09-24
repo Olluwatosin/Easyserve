@@ -69,3 +69,30 @@ def generate_exit_pass_token(order_id: str, venue_id: str) -> str:
 
 def generate_uuid() -> str:
     return str(uuid.uuid4())
+
+
+#: Words short enough to read aloud and type on a phone keypad, with no pairs
+#: that look alike. A password somebody has to relay over WhatsApp and then type
+#: at a door is a usability problem before it is a security one.
+_WORDS = (
+    "amber", "bottle", "cedar", "delta", "ember", "falcon", "garnet", "harbour",
+    "indigo", "jasper", "kola", "lagoon", "mango", "nectar", "onyx", "pepper",
+    "quartz", "river", "saffron", "tonic", "umber", "velvet", "willow", "zinc",
+)
+
+
+def generate_readable_password() -> str:
+    """A password a manager can dictate over the phone without spelling it.
+
+    Two words and three digits is roughly 24 bits from the wordlist plus ten
+    from the digits — weak against an offline attack on a stolen hash, and
+    entirely adequate for what this is: a temporary credential handed to a staff
+    member, over a rate-limited login, which they are expected to change.
+    """
+    import secrets
+
+    return (
+        f"{secrets.choice(_WORDS).capitalize()}-"
+        f"{secrets.choice(_WORDS)}-"
+        f"{secrets.randbelow(900) + 100}"
+    )

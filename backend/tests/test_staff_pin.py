@@ -205,3 +205,102 @@ async def test_changing_a_pin_replaces_the_old_one(client):
         "/api/v1/auth/pin-login", json={"venue_slug": venue["slug"], "pin": "8321"}
     )
     assert old.status_code == 401, "the replaced PIN must stop working"
+
+
+# ── The other door: email and password ───────────────────────────────────────
+#
+# Staff are created with a password as well as a PIN, and email sign-in works
+# for them — but the password was set once at creation and then unrecoverable.
+# So the owner could neither tell somebody their password nor change it: the
+# door existed and nobody could open it.
+
+
+async def test_an_owner_can_issue_a_staff_password_and_is_shown_it_once(client):
+    headers = await _owner_headers(client)
+    body = _staff_body()
+    created = (await client.post("/api/v1/staff", json=body, headers=headers)).json()
+
+    r = await client.patch(
+        f"/api/v1/staff/{created['id']}/password", json={}, headers=headers
+    )
+    assert r.status_code == 200, r.text
+    issued = r.json()["password"]
+    assert issued, "no password came back, so there is still no way to tell anyone"
+
+    # And it actually works.
+    login = await client.post(
+        "/api/v1/auth/login", json={"email": body["email"], "password": issued}
+    )
+    assert login.status_code == 200
+
+
+async def test_a_new_password_retires_the_old_one(client):
+    """Resetting is also how somebody is locked out — of a shared phone left
+    signed in, or after they leave."""
+    headers = await _owner_headers(client)
+    body = _staff_body()
+    created = (await client.post("/api/v1/staff", json=body, headers=headers)).json()
+
+    await client.patch(f"/api/v1/staff/{created['id']}/password", json={}, headers=headers)
+
+    old = await client.post(
+        "/api/v1/auth/login",
+        json={"email": body["email"], "password": body["password"]},
+    )
+    assert old.status_code == 401, "the password set at creation still works"
+
+
+async def test_a_generated_password_can_be_read_down_a_phone(client):
+    """It gets relayed over WhatsApp and typed on a phone, so it is a usability
+    problem before it is a security one.
+
+    Words rather than random characters is the whole point: nobody spells
+    "Willow" letter by letter, so the l/I/0/O confusion that plagues random
+    strings does not arise. What has to hold is that it stays one token — a
+    space would survive neither a copy-paste nor a dictation.
+    """
+    import re
+
+    from app.utils.security import generate_readable_password
+
+    shape = re.compile(r"^[A-Z][a-z]+-[a-z]+-\d{3}$")
+    seen = set()
+    for _ in range(50):
+        pw = generate_readable_password()
+        assert shape.match(pw), f"{pw!r} is not two words and three digits"
+        assert len(pw) >= 12
+        seen.add(pw)
+
+    # Not proof of entropy, but it would catch a generator that had stopped
+    # varying — which is the failure that looks fine until two people share one.
+    assert len(seen) > 40
+
+
+async def test_an_owner_cannot_reset_their_own_password_here(client):
+    """Changing your own password should require the current one; this endpoint
+    deliberately does not ask for it."""
+    headers = await _owner_headers(client)
+    me = (await client.get("/api/v1/auth/me", headers=headers)).json()
+    r = await client.patch(f"/api/v1/staff/{me['id']}/password", json={}, headers=headers)
+    assert r.status_code == 400
+
+
+async def test_staff_cannot_reset_each_other(client):
+    headers = await _owner_headers(client)
+    victim = (await client.post("/api/v1/staff", json=_staff_body(), headers=headers)).json()
+
+    venue = (await client.get("/api/v1/venues/me", headers=headers)).json()
+    await client.post(
+        "/api/v1/staff",
+        json=_staff_body(role="cashier", pin="3333"),
+        headers=headers,
+    )
+    them = await client.post(
+        "/api/v1/auth/pin-login", json={"venue_slug": venue["slug"], "pin": "3333"}
+    )
+    staff_headers = {"Authorization": f"Bearer {them.json()['access_token']}"}
+
+    r = await client.patch(
+        f"/api/v1/staff/{victim['id']}/password", json={}, headers=staff_headers
+    )
+    assert r.status_code == 403

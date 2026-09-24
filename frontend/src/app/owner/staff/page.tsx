@@ -31,6 +31,120 @@ const ROLE_COLORS: Record<StaffRole, string> = {
 const PAD_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"];
 
 /**
+ * A newly issued password, shown once.
+ *
+ * The same bargain as the PIN, and for the same reason: a password is stored
+ * hashed, so the moment just after issuing one is the only moment anybody can
+ * see it. Before this there was no way to issue one at all — a password was set
+ * when the account was created and then became unrecoverable, so the email
+ * sign-in existed and nobody could open it.
+ *
+ * The message is composed here, in the browser. The password reached this
+ * screen in the response to the reset and goes straight into the owner's own
+ * WhatsApp; it is never written anywhere else.
+ */
+function PasswordIssued({
+  member,
+  password,
+  onClose,
+}: {
+  member: StaffMember;
+  password: string;
+  onClose: () => void;
+}) {
+  const firstName = member.full_name.split(" ")[0];
+
+  function sendOnWhatsApp() {
+    const link =
+      typeof window === "undefined" ? "" : `${window.location.origin}/login`;
+    const text =
+      `Hi ${firstName} — here is your EasyServe sign-in for a phone or laptop.\n\n` +
+      `Open: ${link}\n` +
+      `Email: ${member.email}\n` +
+      `Password: ${password}\n\n` +
+      `On the floor you can still use your 4-digit PIN instead. ` +
+      `Keep this to yourself — ask me if you need a new one.`;
+    const to = member.phone ? member.phone.replace(/\D/g, "") : "";
+    window.open(`https://wa.me/${to}?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div
+        className="relative w-full max-w-sm rounded-2xl p-6 animate-fade-in"
+        style={{
+          background: "#111827",
+          border: "1px solid #1E2D42",
+          boxShadow: "0 32px 80px rgba(0,0,0,0.6)",
+        }}
+      >
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 p-1.5 rounded-lg"
+          style={{ color: "var(--muted)" }}
+        >
+          <X size={15} />
+        </button>
+
+        <p className="font-semibold text-sm mb-1" style={{ color: "var(--text)" }}>
+          New password for {firstName}
+        </p>
+        <p className="text-xs mb-5" style={{ color: "var(--muted)" }}>
+          {member.email}
+        </p>
+
+        <div
+          className="rounded-xl px-4 py-4 text-center mb-4"
+          style={{
+            background: "rgba(0,212,180,0.07)",
+            border: "1px solid rgba(0,212,180,0.25)",
+          }}
+        >
+          <p
+            className="font-bold"
+            style={{ fontSize: 22, letterSpacing: "0.02em", color: "var(--teal)" }}
+          >
+            {password}
+          </p>
+        </div>
+
+        <p className="text-xs leading-relaxed mb-4" style={{ color: "var(--muted)" }}>
+          This is the only time it can be shown — passwords are stored scrambled,
+          so nobody, including you, can look one up later. Issue a new one any
+          time. Anything {firstName} was signed in on has been signed out.
+        </p>
+
+        <button onClick={sendOnWhatsApp} className="btn-teal w-full">
+          <MessageCircle size={14} />
+          {member.phone ? "Send on WhatsApp" : "Send on WhatsApp…"}
+        </button>
+
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(password);
+              toast.success("Password copied");
+            }}
+            className="flex-1 py-2 rounded-lg text-sm font-medium"
+            style={{ border: "1px solid rgba(255,255,255,0.14)", color: "var(--text-soft)" }}
+          >
+            Copy
+          </button>
+          <button
+            onClick={onClose}
+            className="flex-1 py-2 rounded-lg text-sm font-medium"
+            style={{ border: "1px solid rgba(255,255,255,0.14)", color: "var(--text-soft)" }}
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Set a PIN, then hand it to the person it belongs to.
  *
  * A PIN is stored hashed and cannot be read back — so the moment just after
@@ -254,6 +368,7 @@ export default function StaffPage() {
   const [venueSlug, setVenueSlug] = useState("");
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const [pwTarget, setPwTarget] = useState<{ member: StaffMember; password: string } | null>(null);
   const [pinTarget, setPinTarget] = useState<
     { member: StaffMember; presetPin?: string } | null
   >(null);
@@ -294,6 +409,20 @@ export default function StaffPage() {
     }
   }
 
+  /** Issue a new password and show it once.
+
+      A password was set when the account was created and then became
+      unrecoverable — correctly hashed, with nothing able to say what it was. So
+      the email door existed and nobody could open it. */
+  async function resetPassword(member: StaffMember) {
+    try {
+      const { data } = await api.patch(`/staff/${member.id}/password`, {});
+      setPwTarget({ member, password: data.password });
+    } catch {
+      toast.error("Could not reset that password");
+    }
+  }
+
   async function reactivate(id: string) {
     try {
       await api.patch(`/staff/${id}/reactivate`);
@@ -326,6 +455,14 @@ export default function StaffPage() {
 
   return (
     <div>
+      {pwTarget && (
+        <PasswordIssued
+          member={pwTarget.member}
+          password={pwTarget.password}
+          onClose={() => setPwTarget(null)}
+        />
+      )}
+
       {pinTarget && (
         <PinModal
           member={pinTarget.member}
@@ -477,6 +614,18 @@ export default function StaffPage() {
                           No PIN
                         </span>
                       )}
+                      <button
+                        onClick={() => resetPassword(member)}
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium"
+                        style={{
+                          background: "rgba(255,255,255,0.04)",
+                          border: "1px solid #1E2D42",
+                          color: "var(--muted)",
+                        }}
+                        title="Issue a new password for email sign-in"
+                      >
+                        Password
+                      </button>
                       <button
                         onClick={() => setPinTarget({ member })}
                         className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all"

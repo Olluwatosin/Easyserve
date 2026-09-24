@@ -497,6 +497,16 @@ function PinLoginContent() {
                 <p className="text-xs text-center mt-5" style={{ color: "var(--muted)" }}>
                   Each role has a unique PIN · Contact your manager if you&apos;ve forgotten yours
                 </p>
+
+                {/* The other door. Staff have an email and password too, which
+                    is the sensible route from your own phone off the floor —
+                    and the only route for an owner, who has no PIN. */}
+                <p className="text-xs text-center mt-3" style={{ color: "var(--muted)" }}>
+                  Manager or owner?{" "}
+                  <a href="/login" className="text-teal hover:underline font-medium">
+                    Sign in with email
+                  </a>
+                </p>
               </div>
             )}
           </div>
