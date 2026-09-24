@@ -14,6 +14,7 @@ from app.models.user import User
 from app.models.menu_item import MenuItem
 from app.models.venue import Venue
 from app.schemas.order import (
+    CoversUpdate,
     ItemStatusUpdate,
     OrderAssign,
     OrderResponse,
@@ -321,3 +322,47 @@ async def reassign_order(
     order.assigned_to = req.attendant_id
     await db.commit()
     return {"order_id": order_id, "assigned_to": req.attendant_id}
+
+
+@router.patch("/{order_id}/covers", response_model=OrderResponse)
+async def set_covers(
+    order_id: str,
+    req: CoversUpdate,
+    current_user: User = Depends(
+        require_roles("owner", "attendant", "cashier", "bartender")
+    ),
+    db: AsyncSession = Depends(get_db),
+):
+    """Record how many people are on a bill.
+
+    Spend per head is the number a venue actually runs on — it decides whether a
+    quiet night was quiet or merely small, and it is the difference between "we
+    took less" and "fewer people came", which call for opposite responses. None
+    of that can be computed from sales alone.
+
+    Anyone on the floor can set it, because the person who knows is whoever is
+    standing at the table. A paid bill stays editable: covers are usually
+    remembered at the end of the night, and refusing the correction after
+    payment is how the field ends up permanently blank.
+    """
+    if req.covers is not None and not (0 < req.covers <= 200):
+        # A bill for zero people is a mistyped clear, and 200 at one table is a
+        # mistyped anything.
+        raise HTTPException(
+            status_code=400, detail="Covers must be between 1 and 200"
+        )
+
+    result = await db.execute(
+        _order_query().where(
+            Order.id == order_id, Order.venue_id == current_user.venue_id
+        )
+    )
+    order = result.scalar_one_or_none()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    order.covers = req.covers
+    await db.commit()
+
+    result = await db.execute(_order_query().where(Order.id == order_id))
+    return result.scalar_one()

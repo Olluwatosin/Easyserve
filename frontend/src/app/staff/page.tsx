@@ -16,6 +16,7 @@ import { groupOpenByTable, runningFor, walkOrder, type TableLive } from "@/lib/t
 import { TakeOrderSheet } from "@/components/TakeOrderSheet";
 import { useAuthStore } from "@/stores/auth";
 import { Summons, type SummonsData } from "@/components/Summons";
+import { CoversPicker } from "@/components/CoversPicker";
 import AuthGuard from "@/components/AuthGuard";
 import { formatNGN, timeAgo } from "@/lib/utils";
 import { Bell, BellRing, CheckCircle, ChefHat, Clock, LogOut, Plus, Wallet, Wine } from "lucide-react";
@@ -55,6 +56,8 @@ interface OrderItem {
 }
 
 interface Order {
+  /** null means nobody has said yet — not a table of nobody. */
+  covers: number | null;
   total_amount: number;
   service_charge: number;
   vat_amount: number;
@@ -675,6 +678,26 @@ function StaffContent() {
                           {formatNGN(orderTotal)}
                         </span>
                       </div>
+                    </div>
+
+                    {/* Who is on it. Spend per head cannot be derived from
+                        anything else on this card, and the only person who knows
+                        is whoever is standing at the table. */}
+                    <div
+                      className="px-4 py-2.5"
+                      style={{ borderBottom: "1px solid #1E2D42" }}
+                    >
+                      <CoversPicker
+                        orderId={order.id}
+                        covers={order.covers}
+                        onChange={(n) =>
+                          setOrders((prev) =>
+                            prev.map((o) =>
+                              o.id === order.id ? { ...o, covers: n } : o,
+                            ),
+                          )
+                        }
+                      />
                     </div>
 
                     {/* Items */}

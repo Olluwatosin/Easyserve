@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { formatNGN } from "@/lib/utils";
+import { NightNote } from "@/components/NightNote";
 import { AlertTriangle, DollarSign, ShoppingBag, Table2, TrendingUp, UtensilsCrossed, Wallet, Wine, XCircle } from "lucide-react";
 
 interface TonightData {
@@ -97,6 +98,8 @@ export default function TonightPage() {
           {new Date().toLocaleDateString("en-NG", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
         </p>
       </div>
+
+      <NightNote />
 
       {/* Revenue hero */}
       <div

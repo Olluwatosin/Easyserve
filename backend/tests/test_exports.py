@@ -312,7 +312,9 @@ async def test_it_downloads_as_a_named_file(client):
     assert "2026-08-01_to_2026-08-31" in disposition
 
 
-@pytest.mark.parametrize("dataset", ["orders", "items", "payments", "shifts", "stock"])
+@pytest.mark.parametrize(
+    "dataset", ["orders", "items", "payments", "shifts", "stock", "nights"]
+)
 async def test_every_export_runs(client, dataset):
     """A smoke test over all five, because each is a different query and a
     broken join only shows up when somebody clicks it."""

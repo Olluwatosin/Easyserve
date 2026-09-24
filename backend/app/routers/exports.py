@@ -40,6 +40,7 @@ from app.models.stock_movement import StockMovement
 from app.models.table import Table
 from app.models.user import User
 from app.models.venue import Venue
+from app.models.venue_night import VenueNight
 from app.utils.venue_time import LAGOS, business_date
 
 router = APIRouter(prefix="/exports", tags=["exports"])
@@ -48,7 +49,7 @@ router = APIRouter(prefix="/exports", tags=["exports"])
 #: enough that one click cannot ask for a decade and time the request out.
 MAX_RANGE_DAYS = 370
 
-DATASETS = ("orders", "items", "payments", "shifts", "stock")
+DATASETS = ("orders", "items", "payments", "shifts", "stock", "nights")
 
 
 def _resolve_range(start: date | None, end: date | None) -> tuple[date, date]:
@@ -278,12 +279,40 @@ async def _stock(db: AsyncSession, vid: str, start: date, end: date):
     return header, out
 
 
+async def _nights(db: AsyncSession, vid: str, start: date, end: date):
+    """Why each night was what it was.
+
+    Exported alongside the sales so the two can be joined: a figure and the live
+    act, holiday or power cut that produced it. That join is the whole reason
+    the notes are collected — on its own this file is a diary.
+    """
+    rows = await db.execute(
+        select(VenueNight, User.full_name)
+        .outerjoin(User, User.id == VenueNight.recorded_by)
+        .where(
+            VenueNight.venue_id == vid,
+            VenueNight.business_date.between(start, end),
+        )
+        .order_by(VenueNight.business_date)
+    )
+    header = ["Night", "Day", "Tag", "Note", "Written by", "Written at"]
+    out = []
+    for n, name in rows.all():
+        out.append([
+            n.business_date.isoformat(),
+            n.business_date.strftime("%A"),
+            n.tag or "", n.note or "", name or "", _local(n.created_at),
+        ])
+    return header, out
+
+
 BUILDERS = {
     "orders": _orders,
     "items": _items,
     "payments": _payments,
     "shifts": _shifts,
     "stock": _stock,
+    "nights": _nights,
 }
 
 

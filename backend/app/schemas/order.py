@@ -72,6 +72,9 @@ class OrderResponse(BaseModel):
     vat_amount: float
     grand_total: float
     customer_phone: str | None
+    #: How many people are on this bill. None means nobody has said — which is
+    #: different from an empty table, and the reports keep them apart.
+    covers: int | None = None
     items: list[OrderItemResponse]
     created_at: datetime
     updated_at: datetime
@@ -81,6 +84,16 @@ class OrderResponse(BaseModel):
 
 class ItemStatusUpdate(BaseModel):
     status: Literal["pending", "preparing", "ready", "delivered", "cancelled"]
+
+
+class CoversUpdate(BaseModel):
+    """How many guests are on this bill.
+
+    Null clears it back to unknown, which is a real answer: an attendant who
+    tapped the wrong number should be able to take it back rather than leave a
+    figure that spend-per-head will quietly divide by.
+    """
+    covers: int | None
 
 
 class OrderAssign(BaseModel):
