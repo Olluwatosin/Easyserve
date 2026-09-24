@@ -47,6 +47,7 @@ from app.routers import (
     websocket,
     demo,
     stock,
+    exports,
 )
 from app.services.ws_manager import manager
 
@@ -86,6 +87,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # The browser hides every response header from JavaScript cross-origin
+    # unless it is named here, and the frontend and API sit on different
+    # origins. Without these the export downloads as a blob with a generated
+    # name and no row count — locally it works, in production it does not.
+    expose_headers=["Content-Disposition", "X-Row-Count"],
 )
 
 app.include_router(auth.router, prefix="/api/v1")
@@ -103,6 +109,7 @@ app.include_router(analytics.router, prefix="/api/v1")
 app.include_router(staff.router, prefix="/api/v1")
 app.include_router(demo.router, prefix="/api/v1")
 app.include_router(stock.router, prefix="/api/v1")
+app.include_router(exports.router, prefix="/api/v1")
 app.include_router(websocket.router)
 
 
