@@ -155,3 +155,44 @@ def test_the_guest_is_told_where_their_order_actually_went():
     assert "Sent to kitchen!" not in page, (
         "the confirmation still names the kitchen regardless of what was ordered"
     )
+
+
+# ── Two things an owner and an attendant found on their own phones ───────────
+
+def test_the_attendant_does_not_assume_sound_is_on():
+    """Reported: a guest pinged the attendant and nothing sounded or buzzed.
+
+    Browsers keep audio locked until a real gesture, and the only thing that
+    could unlock it was a prompt rendered when sound was *off*. It defaulted to
+    on, so the prompt never appeared, nothing ever played, and there was nothing
+    on screen to explain why.
+    """
+    from pathlib import Path
+
+    page = (
+        Path(__file__).resolve().parent.parent.parent
+        / "frontend" / "src" / "app" / "staff" / "page.tsx"
+    ).read_text()
+
+    assert "useState(true)" not in page.split("soundOn")[1][:40], (
+        "sound is assumed on again, which hides the only prompt that can "
+        "unlock it"
+    )
+    # Any tap should unlock it, so an attendant never has to hunt for a button.
+    assert "pointerdown" in page
+
+
+def test_the_owner_sidebar_collapses_on_a_phone():
+    """Reported: the owner page overlaps on a phone. The sidebar was a fixed
+    220px with no breakpoint, so on a 375px screen it took most of the width
+    and squeezed the page into what was left."""
+    from pathlib import Path
+
+    layout = (
+        Path(__file__).resolve().parent.parent.parent
+        / "frontend" / "src" / "app" / "owner" / "layout.tsx"
+    ).read_text()
+
+    assert "lg:static" in layout, "the sidebar is still a column at every width"
+    assert "-translate-x-full" in layout, "nothing moves it off a small screen"
+    assert "lg:hidden" in layout, "there is no way to open it on a phone"

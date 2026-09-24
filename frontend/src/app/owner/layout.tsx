@@ -1,8 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Clock, BarChart3, LayoutDashboard, LogOut, Moon, Package, Settings, ShoppingBag, Table2, Tag, Users, UtensilsCrossed } from "lucide-react";
+import { Clock, BarChart3, Menu, LayoutDashboard, LogOut, Moon, Package, Settings, ShoppingBag, Table2, Tag, Users, UtensilsCrossed } from "lucide-react";
 import AuthGuard from "@/components/AuthGuard";
 import { EsLogo } from "@/components/EsLogo";
 import { useAuthStore } from "@/stores/auth";
@@ -42,6 +43,7 @@ function GradientDivider() {
 function OwnerShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const [navOpen, setNavOpen] = useState(false);
   const { user, logout } = useAuthStore();
 
   const currentPage = nav.find(({ href, exact }) =>
@@ -68,9 +70,27 @@ function OwnerShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen bg-bg overflow-hidden ambient-night">
+      {/* On a phone the sidebar is an overlay, not a column. It was a fixed
+          220px with no breakpoint, so on a 375px screen it took most of the
+          width and the page underneath was squeezed into what was left —
+          which is the overlapping an owner sees when they open this on their
+          own phone. */}
+      {navOpen && (
+        <div
+          className="fixed inset-0 z-40 lg:hidden"
+          style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}
+          onClick={() => setNavOpen(false)}
+        />
+      )}
+
       {/* ── Sidebar ── */}
       <aside
-        className="w-[220px] flex-shrink-0 flex flex-col border-r border-border"
+        className={cn(
+          "w-[220px] flex-shrink-0 flex flex-col border-r border-border",
+          "fixed inset-y-0 left-0 z-50 transition-transform duration-200",
+          "lg:static lg:translate-x-0",
+          navOpen ? "translate-x-0" : "-translate-x-full",
+        )}
         style={{
           background:
             "linear-gradient(180deg, rgba(14,24,32,0.82) 0%, rgba(8,13,20,0.88) 100%)",
@@ -102,6 +122,7 @@ function OwnerShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={href}
                 href={href}
+                onClick={() => setNavOpen(false)}
                 className={cn(
                   "flex items-center gap-2.5 py-2 rounded-xl text-sm font-medium transition-all duration-150",
                   active
@@ -168,10 +189,18 @@ function OwnerShell({ children }: { children: React.ReactNode }) {
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top header */}
         <header
-          className="flex-shrink-0 border-b border-border px-7 py-3 flex items-center justify-between"
+          className="flex-shrink-0 border-b border-border px-4 sm:px-7 py-3 flex items-center justify-between"
           style={{ background: "rgba(8,13,20,0.55)", backdropFilter: "blur(14px)" }}
         >
           <div className="flex items-center gap-3">
+            <button
+              onClick={() => setNavOpen(true)}
+              className="lg:hidden p-1.5 -ml-1 rounded-lg"
+              style={{ color: "var(--text-soft)" }}
+              aria-label="Open menu"
+            >
+              <Menu size={18} />
+            </button>
             <p className="font-display font-semibold text-sm" style={{ color: "var(--text)" }}>
               {currentPage?.label ?? "Dashboard"}
             </p>

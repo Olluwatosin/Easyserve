@@ -74,7 +74,24 @@ function StaffContent() {
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [canTakePayment, setCanTakePayment] = useState(false);
   const [payingOrder, setPayingOrder] = useState<string | null>(null);
-  const [soundOn, setSoundOn] = useState(true);
+  // Starts from whether audio is *actually* unlocked, not from an assumption.
+  // It used to start true, so the "turn on sound" prompt — the only thing that
+  // can unlock the audio context, which browsers keep locked until a real tap —
+  // was never rendered. Sound appeared to be on, nothing ever played, and there
+  // was no way from the screen to discover why.
+  const [soundOn, setSoundOn] = useState(false);
+
+  // A browser only unlocks audio on a genuine gesture, so any tap anywhere on
+  // this screen is taken as consent. An attendant tapping "Served" should not
+  // also have to find a separate button to make the next guest audible.
+  useEffect(() => {
+    if (soundOn) return;
+    const tryUnlock = async () => {
+      if (await unlock()) setSoundOn(true);
+    };
+    window.addEventListener("pointerdown", tryUnlock, { once: true });
+    return () => window.removeEventListener("pointerdown", tryUnlock);
+  }, [soundOn]);
   const [tableSheet, setTableSheet] = useState<string | null>(null);
   const [taking, setTaking] = useState(false);
   const [buzz, setBuzz] = useState<{
