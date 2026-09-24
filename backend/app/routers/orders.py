@@ -191,8 +191,21 @@ async def update_item_status(
         raise HTTPException(status_code=403, detail="Kitchen can only update food items")
 
     order = item.order
-    if order.status == "paid":
-        raise HTTPException(status_code=400, detail="Cannot modify items on a paid order")
+    # Paying and being served are different things, and a guest who settles up
+    # front — which is what the online payment flow encourages — is still
+    # waiting for the drink. This used to refuse *every* update on a paid
+    # order, so a prepaid round froze at "pending" for good: the bar could not
+    # mark it made, the floor's Served button did nothing, and the guest's
+    # tracker never moved. The ticket stayed on the bar screen forever.
+    #
+    # What the rule was actually protecting is still protected. Voiding a line
+    # after money has changed hands is the classic inside-theft vector, so that
+    # single transition stays closed and points at the refund path instead.
+    if order.status == "paid" and req.status == "cancelled":
+        raise HTTPException(
+            status_code=400,
+            detail="This order is already paid — refund it rather than voiding the item",
+        )
 
     # Voiding an item adjusts the bill and leaves an audit row — the classic
     # inside-theft vector is a quiet cancel after the customer paid cash.
@@ -241,9 +254,16 @@ async def update_item_status(
 
     item.status = req.status
 
-    # Auto-advance order status based on all items
+    # Auto-advance order status based on all items.
+    #
+    # Never over "paid". One column is carrying two different facts — how far
+    # the order has been served, and whether it has been settled — and settled
+    # is the one that must win. Without this guard, serving a prepaid round
+    # rewrites it to "fully_served": it reappears in the cashier's queue, shows
+    # as owing on the floor, and the guest can be charged a second time for a
+    # drink they already paid for.
     active_items = [i for i in order.items if i.status != "cancelled"]
-    if active_items:
+    if active_items and order.status != "paid":
         delivered = sum(1 for i in active_items if i.status == "delivered")
         if delivered == len(active_items):
             order.status = "fully_served"

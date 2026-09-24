@@ -113,6 +113,14 @@ export default function BillPage({
   const total = subtotal + serviceCharge + vat;
   const allPaid =
     orders.length > 0 && orders.every((o) => o.status === "paid");
+
+  /** Paying and being served are different things, and a guest can do the first
+      long before the second. Saying "settled" over a drink that has not been
+      made reads as "we are finished with you", so the page has to know the
+      difference rather than treating paid as done. */
+  const stillComing = orders.some((o) =>
+    o.items.some((i) => ["pending", "preparing", "ready"].includes(i.status)),
+  );
   const unpaidOrder = orders.find((o) => o.status !== "paid");
 
   async function payOnline() {
@@ -185,7 +193,7 @@ export default function BillPage({
             className="font-display text-2xl font-bold"
             style={{ color: "var(--text)" }}
           >
-            {allPaid ? "Your Night, Settled ✓" : "Your Bill"}
+            {allPaid ? (stillComing ? "Paid — order on its way" : "Your Night, Settled ✓") : "Your Bill"}
           </p>
           {orders[0] && (
             <p className="text-xs mt-1" style={{ color: "var(--muted)" }}>
@@ -201,15 +209,13 @@ export default function BillPage({
             Shown only while something is still coming. Once everything is
             served this collapses away rather than lingering as a wall of
             ticks — the guest's attention should move to the bill. */}
-        {orders.some((o) =>
-          o.items.some((i) => ["pending", "preparing", "ready"].includes(i.status)),
-        ) && (
+        {stillComing && (
           <div className="mb-5">
             <p
               className="text-xs font-semibold uppercase tracking-widest mb-2.5"
               style={{ color: "var(--muted)" }}
             >
-              Your order
+              {allPaid ? "Still coming" : "Your order"}
             </p>
             <OrderTracker
               items={orders.flatMap((o) =>
@@ -236,15 +242,29 @@ export default function BillPage({
               >
                 Order
               </span>
-              <span
-                className="text-xs font-semibold px-2.5 py-0.5 rounded-full capitalize"
-                style={{
-                  background: `${STATUS_COLOR[order.status] ?? "#6B7A99"}15`,
-                  color: STATUS_COLOR[order.status] ?? "#6B7A99",
-                }}
-              >
-                {STATUS_LABEL[order.status] ?? order.status}
-              </span>
+              {/* An order can be paid and not yet made — a guest who settles up
+                  front is still waiting for the drink. The pill said only
+                  "Paid", directly above a tracker saying "Sent", and the two
+                  read as a contradiction rather than as two true facts. */}
+              {(() => {
+                const waiting = order.items.some((i) =>
+                  ["pending", "preparing", "ready"].includes(i.status),
+                );
+                const paidAndWaiting = order.status === "paid" && waiting;
+                const colour = paidAndWaiting
+                  ? "#FFB347"
+                  : STATUS_COLOR[order.status] ?? "#6B7A99";
+                return (
+                  <span
+                    className="text-xs font-semibold px-2.5 py-0.5 rounded-full"
+                    style={{ background: `${colour}15`, color: colour }}
+                  >
+                    {paidAndWaiting
+                      ? "Paid · still coming"
+                      : STATUS_LABEL[order.status] ?? order.status}
+                  </span>
+                );
+              })()}
             </div>
 
             <div
