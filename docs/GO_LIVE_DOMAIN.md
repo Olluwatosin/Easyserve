@@ -52,7 +52,55 @@ would be a records problem rather than propagation.
 
 ## 1. DNS, in the Truehost control panel
 
-### 1a. Find the right screen — there are two, and only one will work
+### 1a. Truehost may have no DNS zone to edit — and that is fine
+
+Two facts arrived together: the Cloudoon nameservers return SERVFAIL for this
+zone, and there is no DNS editor to be found in the panel. They probably have one
+cause. Plenty of registrars point a newly bought domain at their parking
+nameservers without provisioning an editable zone unless hosting is bought too.
+There is then nothing to find, because nothing was created.
+
+**Do not keep looking for it.** The fix that does not depend on Truehost
+provisioning anything is to keep them as the registrar and move DNS to Cloudflare,
+which is free and takes about ten minutes. That is section 1b. The Truehost screen
+you *do* need — Nameservers — is core domain management and is always present.
+
+Only if you would rather stay on Truehost DNS: their editor, when it exists, is
+either **Domains → My Domains → the domain → DNS Management** in the client area,
+or **cPanel → Domains → Zone Editor** if the domain is attached to a hosting
+package. If neither exists, open a ticket with exactly this:
+
+> easyserveng.com is delegated to NS1/2/3.CLOUDOON.COM but those nameservers
+> return SERVFAIL for the zone, and I have no DNS Management option in my client
+> area. Please create an editable DNS zone for this domain, or confirm that DNS
+> hosting is not included so I can move it elsewhere.
+
+That last clause matters: it turns "please help" into a question they have to
+answer either way, which is what gets a first-line ticket moved along.
+
+### 1b. The route that works regardless: Cloudflare for DNS
+
+Truehost stays your registrar. Cloudflare only answers DNS queries. Nothing about
+the domain ownership changes and no money changes hands.
+
+1. Sign up at `cloudflare.com`, **Add a site**, enter `easyserveng.com`, pick the
+   **Free** plan.
+2. It will try to import existing records and find nothing — expected, given the
+   zone is not being served. Continue.
+3. Add the three records from 1c below. Set every one to **DNS only** — the grey
+   cloud, not the orange one. See the warning in 1c about why.
+4. Cloudflare shows you two nameservers, like
+   `xxx.ns.cloudflare.com` / `yyy.ns.cloudflare.com`. Copy both.
+5. In Truehost: **Domains → My Domains → easyserveng.com → Nameservers**. Choose
+   **Use custom nameservers**, replace the three Cloudoon entries with
+   Cloudflare's two, save.
+6. Back in Cloudflare, it checks periodically and flips the domain to **Active**.
+   Usually under an hour; the registry change itself is quick.
+
+This also gets you a DNS editor that is genuinely good, instant record changes,
+and no dependence on Truehost's zone provisioning ever again.
+
+### 1c. Find the right screen — two exist if you stay on Truehost
 
 Truehost's client area is WHMCS; its hosting is cPanel. DNS lives in a different
 place depending on whether this domain has hosting attached to it.
@@ -76,7 +124,7 @@ enough to create the zone. If it is not, raise a ticket with exactly this:
 That is a two-minute fix on their side, and it is not something you can do from
 the panel.
 
-### 1b. Delete what is already there
+### 1d. Delete what is already there
 
 A newly registered Truehost domain usually arrives with records pointing at their
 own parking page — typically an `A` on the root and a `CNAME` or `A` on `www`,
@@ -90,7 +138,7 @@ to work intermittently, which is far harder to diagnose than being broken.
 Leave alone: `MX` records, `TXT` records (SPF/DKIM), and the `NS` records. Those
 are mail and delegation; nothing here touches them.
 
-### 1c. Add the three records
+### 1e. Add the three records
 
 | Type | Name | Value / Points to |
 |---|---|---|
@@ -123,7 +171,7 @@ of a domain alongside the NS records that have to live there. Vercel publishes
 `76.76.21.21` as a fixed anycast address for exactly this reason. Subdomains have
 no such restriction, which is why `www` and `api` are CNAMEs.
 
-### 1d. Confirm before moving on
+### 1f. Confirm before moving on
 
 ```sh
 curl -s -H 'accept: application/dns-json' \
@@ -140,27 +188,16 @@ means it resolves but that name has no record, which is a typo in the Name field
 Give it 15–30 minutes after saving. If a record was queried while wrong, the bad
 answer may be cached for up to its TTL.
 
-### 1e. If the Truehost panel fights you
+### 1g. Staying on Truehost DNS instead
 
-Truehost's DNS editor is limited, and their nameservers have already proved slow
-to serve a new zone. A common alternative is to keep Truehost as the **registrar**
-and move DNS to Cloudflare, which is free:
+If the ticket in 1a gets you a working zone and you would rather not involve
+Cloudflare, that is a perfectly good outcome — the records in 1e are identical.
+Add them in whichever editor they give you, then run the check in 1f.
 
-1. Add `easyserveng.com` as a site in Cloudflare; it imports what it can find.
-2. Add the three records above, and set each to **DNS only** — the grey cloud,
-   not the orange one.
-3. In Truehost: **Domains → My Domains → easyserveng.com → Nameservers**, and
-   replace the Cloudoon entries with the two Cloudflare gives you.
-
-Keep the proxy off. Proxying works, but Cloudflare then terminates TLS itself and
-will not pass a WebSocket upgrade through on the free plan without care — so
-orders stop reaching the bar screen while every page still loads. That is the
-hardest failure in this whole document to diagnose, and turning the proxy on is
-the only way to cause it.
-
-This is optional. The records in 1c are the same either way.
-
----
+The one thing to insist on is that the zone actually answers. A panel that saves
+records while the nameservers still return SERVFAIL looks like success and is not:
+the records exist in their database and no resolver on the internet can see them.
+The check in 1f is what tells the difference, and it is the only thing that does.
 
 One more thing, once you reach step 3: Render shows you the exact CNAME target
 for `api` when you add the custom domain. If it differs from
