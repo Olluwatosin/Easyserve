@@ -1,4 +1,11 @@
-# Keeps the free demo backend warm, and resets the seeded venue hourly.
+# Keeps the free demo backend warm. Resets the seeded venue only when asked.
+#
+# The reset used to run hourly. It deletes every row in every table — users and
+# venues included — and rebuilds the demo venue, which is right for a sales demo
+# and catastrophic for anything else: an account handed to a tester stopped
+# working within the hour, along with every order they had entered. Real people
+# are testing on this deployment now, so the schedule is gone and the reset is
+# manual: Actions → Demo keepalive → Run workflow → tick "Also reset".
 #
 # Free tiers sleep after ~15 minutes idle and take 30-60s to wake. A venue owner
 # who opens the demo link and watches a spinner has already formed an opinion,
@@ -11,12 +18,11 @@ name: Demo keepalive
 
 on:
   schedule:
-    - cron: "*/10 * * * *"   # keep warm
-    - cron: "5 * * * *"      # hourly reseed, offset off the busy :00 slot
+    - cron: "*/10 * * * *"   # keep warm only — no reseed on a schedule
   workflow_dispatch:
     inputs:
       reset:
-        description: "Also reset the demo venue"
+        description: "DESTRUCTIVE — wipes every venue, user and order, then reseeds the demo"
         type: boolean
         default: false
 
@@ -71,7 +77,9 @@ jobs:
     name: Reseed the demo venue
     runs-on: ubuntu-latest
     needs: ping
-    if: github.event.schedule == '5 * * * *' || inputs.reset
+    # Manual only. The hourly schedule that used to trigger this is deliberately
+    # gone — see the note at the top of this file.
+    if: inputs.reset
     steps:
       - name: Wipe and re-seed The Grand Noir
         env:
