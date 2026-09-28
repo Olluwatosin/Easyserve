@@ -161,3 +161,6 @@ reset:
 	@$(MAKE) --no-print-directory stop
 	@rm -rf "$(PGDIR)"
 	@echo "→ throwaway database deleted; 'make db' will build a fresh one"
+
+dns: ## Check whether easyserveng.com is wired up yet
+	@./scripts/check-dns.sh
