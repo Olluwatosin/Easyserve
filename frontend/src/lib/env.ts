@@ -33,3 +33,18 @@ export const WS_URL = clean(
   process.env.NEXT_PUBLIC_WS_URL,
   "ws://localhost:8000",
 );
+
+/**
+ * The address printed QR codes should point at, e.g. https://easyserveng.com
+ *
+ * Separate from API_URL because it is not a request target — it is what gets
+ * stuck to furniture. The print sheet used to encode `window.location.origin`,
+ * which quietly means a sticker printed from a Vercel preview, a staging host or
+ * a laptop points there for the rest of its life. Nobody finds out until a guest
+ * scans it, and then it is every table at once, on a night when nothing can be
+ * reprinted.
+ *
+ * Empty by default: unset, the print sheet falls back to the current origin,
+ * which is right for development and honest about not knowing better.
+ */
+export const SITE_URL = clean(process.env.NEXT_PUBLIC_SITE_URL, "");

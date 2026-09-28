@@ -7,6 +7,7 @@ import { ArrowLeft, Printer, AlertTriangle } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { api } from "@/lib/api";
+import { SITE_URL } from "@/lib/env";
 import AuthGuard from "@/components/AuthGuard";
 
 interface Table {
@@ -40,10 +41,16 @@ function PrintableQrSheet() {
   const [layout, setLayout] = useState<LayoutKey>("card");
   const [zone, setZone] = useState<string>("all");
   const [loading, setLoading] = useState(true);
-  const [origin, setOrigin] = useState("");
+  // What the browser is actually on, and what the stickers should say. They are
+  // usually the same; when they are not, printing is the mistake with the widest
+  // blast radius in the product, so the difference is shown rather than resolved
+  // silently.
+  const [browserOrigin, setBrowserOrigin] = useState("");
+  const origin = SITE_URL || browserOrigin;
+  const wrongHost = Boolean(SITE_URL) && Boolean(browserOrigin) && SITE_URL !== browserOrigin;
 
   useEffect(() => {
-    setOrigin(window.location.origin);
+    setBrowserOrigin(window.location.origin);
     Promise.all([
       api.get("/tables").then((r) => r.data as Table[]),
       api.get("/venues/me").then((r) => r.data?.name as string).catch(() => ""),
@@ -120,11 +127,22 @@ function PrintableQrSheet() {
               {origin}/table/…
             </span>
           </p>
-          <p style={{ color: "var(--muted)" }}>
-            If you later move to a different web address, printed codes stop
-            working and all of them need reprinting. Print from the address you
-            intend to keep.
-          </p>
+          {wrongHost ? (
+            <p style={{ color: "#FF9500" }}>
+              You are browsing{" "}
+              <span className="font-mono">{browserOrigin}</span>, but these codes
+              are being printed for{" "}
+              <span className="font-mono">{SITE_URL}</span> — the address this
+              venue is set up on. That is deliberate and correct; the stickers
+              will work once you are on that address.
+            </p>
+          ) : (
+            <p style={{ color: "var(--muted)" }}>
+              If you later move to a different web address, printed codes stop
+              working and all of them need reprinting. Print from the address you
+              intend to keep.
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
