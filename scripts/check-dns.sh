@@ -54,6 +54,33 @@ explain_status() {
   esac
 }
 
+# Is an address inside Cloudflare's own ranges? A proxied record hides its real
+# target and answers with one of these instead, so this is how "orange cloud"
+# is detected. Fetched rather than hardcoded: guessing at prefixes is what made
+# the first version of this call a proxied record healthy.
+CF_RANGES=$(curl -s -m 15 https://www.cloudflare.com/ips-v4 2>/dev/null)
+
+is_cloudflare_ip() {
+  [ -z "$CF_RANGES" ] && return 1
+  CF_RANGES="$CF_RANGES" python3 -c '
+import ipaddress, os, sys
+try:
+    addr = ipaddress.ip_address(sys.argv[1])
+except ValueError:
+    sys.exit(1)
+nets = [ipaddress.ip_network(l) for l in os.environ["CF_RANGES"].split() if l]
+sys.exit(0 if any(addr in n for n in nets) else 1)' "$1" 2>/dev/null
+}
+
+# Any address in the answer that belongs to Cloudflare means the record is
+# proxied, whatever it was configured to point at.
+looks_proxied() {
+  for token in $(echo "$1" | tr ',' ' '); do
+    is_cloudflare_ip "$token" && return 0
+  done
+  return 1
+}
+
 bold "$DOMAIN"
 echo
 
@@ -89,28 +116,49 @@ echo
 bold "Records"
 
 apex=$(resolve "$DOMAIN" A)
-case "$apex" in
-  *"$WANT_APEX"*) ok "$DOMAIN → $apex" ;;
-  '!'*)           wait_ "$DOMAIN — $(explain_status "$apex")" ;;
-  *)              bad "$DOMAIN → $apex (expected $WANT_APEX)" ;;
-esac
+if looks_proxied "$apex"; then
+  bad "$DOMAIN → $apex — PROXIED (orange cloud)"
+  echo "     → set the root A record to DNS only."
+elif [ "$apex" = "!0" ]; then
+  bad "$DOMAIN has no A record — the zone answers but the root is empty"
+  echo "     → Cloudflare DNS → Records → Add record:"
+  echo "       Type A, Name @, IPv4 $WANT_APEX, Proxy status DNS only"
+else
+  case "$apex" in
+    *"$WANT_APEX"*) ok "$DOMAIN → $apex" ;;
+    '!'*)           wait_ "$DOMAIN — $(explain_status "$apex")" ;;
+    *)              bad "$DOMAIN → $apex (expected $WANT_APEX)" ;;
+  esac
+fi
 
 www=$(resolve "www.$DOMAIN" CNAME)
 [ "${www:0:1}" = "!" ] && www=$(resolve "www.$DOMAIN" A)
-case "$www" in
-  *"$WANT_WWW"*)  ok "www → $www" ;;
-  *vercel*)       ok "www → $www" ;;
-  '!'*)           wait_ "www — $(explain_status "$www")" ;;
-  *)              bad "www → $www (expected $WANT_WWW)" ;;
-esac
+if looks_proxied "$www"; then
+  bad "www → $www — PROXIED (orange cloud)"
+  echo "     → Cloudflare DNS → Records → www → set Proxy status to DNS only."
+  echo "       Proxied, it terminates TLS itself and drops the WebSocket upgrade:"
+  echo "       pages load and orders stop reaching the bar screen."
+else
+  case "$www" in
+    *"$WANT_WWW"*|*vercel*) ok "www → $www" ;;
+    '!'*)                   wait_ "www — $(explain_status "$www")" ;;
+    *)                      bad "www → $www (expected $WANT_WWW)" ;;
+  esac
+fi
 
 apirec=$(resolve "$API" CNAME)
 [ "${apirec:0:1}" = "!" ] && apirec=$(resolve "$API" A)
-case "$apirec" in
-  *"$WANT_API"*)  ok "$API → $apirec" ;;
-  '!'*)           wait_ "$API — $(explain_status "$apirec")" ;;
-  *)              bad "$API → $apirec (expected something on $WANT_API)" ;;
-esac
+if looks_proxied "$apirec"; then
+  bad "$API → $apirec — PROXIED (orange cloud)"
+  echo "     → set this one to DNS only too. The API is what carries the"
+  echo "       WebSocket, so proxying it is the more damaging of the two."
+else
+  case "$apirec" in
+    *"$WANT_API"*) ok "$API → $apirec" ;;
+    '!'*)          wait_ "$API — $(explain_status "$apirec")" ;;
+    *)             bad "$API → $apirec (expected something on $WANT_API)" ;;
+  esac
+fi
 echo
 
 # ── Does anything actually answer? ──────────────────────────────────────────
