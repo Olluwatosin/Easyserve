@@ -17,6 +17,11 @@ API="${API_HOST:-api.$DOMAIN}"
 
 # What each name should end up pointing at.
 WANT_APEX="76.76.21.21"
+# The two Cloudflare assigned this zone. Named rather than pattern-matched on
+# "cloudflare" so a half-finished nameserver change is caught: three entries with
+# one stale Cloudoon server still matches a loose check, and resolvers will keep
+# querying the dead one and failing intermittently.
+WANT_NS="james.ns.cloudflare.com sue.ns.cloudflare.com"
 WANT_WWW="cname.vercel-dns.com"
 WANT_API="onrender.com"
 
@@ -61,13 +66,22 @@ except Exception: print(""); raise SystemExit
 print(" ".join(n.get("ldhName","").lower() for n in d.get("nameservers",[])))' 2>/dev/null)
 
 bold "Delegation (at the registry)"
+expected_ns=$(echo "$WANT_NS" | tr ' ' '\n' | sort | paste -sd' ' -)
+actual_ns=$(echo "$registry_ns" | tr ' ' '\n' | grep -v '^$' | sort | paste -sd' ' -)
+
 if [ -z "$registry_ns" ]; then
   wait_ "could not read the registry"
+elif [ "$actual_ns" = "$expected_ns" ]; then
+  ok "delegated to Cloudflare only: $actual_ns"
 elif echo "$registry_ns" | grep -q "cloudflare"; then
-  ok "nameservers are Cloudflare's: $registry_ns"
+  bad "Cloudflare is listed but so is something else: $actual_ns"
+  echo "     → remove the leftover entries in Truehost. Resolvers will keep"
+  echo "       querying the dead server and fail for some visitors and not others."
 else
-  wait_ "still $registry_ns"
-  echo "     → change these in Truehost: Domains → My Domains → Nameservers"
+  wait_ "still $actual_ns"
+  echo "     → in Truehost: Domains → My Domains → easyserveng.com → Nameservers"
+  echo "       set exactly these two, and clear every other box:"
+  for n in $WANT_NS; do echo "         $n"; done
 fi
 echo
 
