@@ -52,27 +52,119 @@ would be a records problem rather than propagation.
 
 ## 1. DNS, in the Truehost control panel
 
-Truehost's DNS editor is under **Domains → Manage → DNS Zone Editor** (their
-panel is cPanel-based, so it may read "Zone Editor").
+### 1a. Find the right screen — there are two, and only one will work
 
-| Type | Name | Value | TTL |
-|---|---|---|---|
-| A | `@` | `76.76.21.21` | 3600 |
-| CNAME | `www` | `cname.vercel-dns.com` | 3600 |
-| CNAME | `api` | `easyserve-demo-api.onrender.com` | 3600 |
+Truehost's client area is WHMCS; its hosting is cPanel. DNS lives in a different
+place depending on whether this domain has hosting attached to it.
 
-Notes that save an evening:
+**Start here:** log in at `my.truehost.cloud` (or whichever Truehost client area
+you bought through) → top menu **Domains** → **My Domains** → click
+`easyserveng.com` → look down the left sidebar.
 
-- **Delete the parking records first.** Truehost points a new domain at its own
-  landing page with an A record on `@` and often a `www` CNAME. Both must go, or
-  the apex resolves to two places and roughly half of all requests reach
-  Truehost's "coming soon" page instead. That failure looks intermittent, which
-  is the worst kind to debug.
-- **Do not proxy through Cloudflare yet.** It works, but it terminates TLS
-  itself, and until the certificates below are issued it turns a clear error into
-  a redirect loop.
-- Render will give you the exact CNAME target when you add the domain in step 3.
-  Use theirs if it differs from the line above.
+- If you see **DNS Management** in that sidebar, that is the screen. Use it.
+- If there is no such entry, this domain is attached to a hosting package, and
+  DNS is in **cPanel → Domains → Zone Editor** instead. Same records either way;
+  only the form differs.
+
+If **DNS Management** opens empty, errors, or says there is no zone for this
+domain, that is the lame delegation described above. Opening the page is often
+enough to create the zone. If it is not, raise a ticket with exactly this:
+
+> easyserveng.com is delegated to NS1/2/3.CLOUDOON.COM but the nameservers
+> return SERVFAIL for the zone — please create the DNS zone for this domain.
+
+That is a two-minute fix on their side, and it is not something you can do from
+the panel.
+
+### 1b. Delete what is already there
+
+A newly registered Truehost domain usually arrives with records pointing at their
+own parking page — typically an `A` on the root and a `CNAME` or `A` on `www`,
+sometimes a `URL Redirect`.
+
+**Delete those two before adding yours.** Not edit — delete. If an old root `A`
+survives beside the new one, DNS hands out both addresses in rotation and roughly
+half of all visitors land on Truehost's "coming soon" page. The site then appears
+to work intermittently, which is far harder to diagnose than being broken.
+
+Leave alone: `MX` records, `TXT` records (SPF/DKIM), and the `NS` records. Those
+are mail and delegation; nothing here touches them.
+
+### 1c. Add the three records
+
+| Type | Name | Value / Points to |
+|---|---|---|
+| A | `@` | `76.76.21.21` |
+| CNAME | `www` | `cname.vercel-dns.com` |
+| CNAME | `api` | `easyserve-demo-api.onrender.com` |
+
+**The Name field is where this goes wrong.** Panels disagree about whether they
+want the label or the whole hostname, and they do not tell you which:
+
+- If the field shows the domain as a greyed-out suffix, or a hint like
+  `.easyserveng.com`, type only `www` and `api`, and `@` for the root.
+- If it expects a full hostname — WHMCS DNS Management usually does — type
+  `easyserveng.com`, `www.easyserveng.com`, `api.easyserveng.com`.
+
+Get it the wrong way round and you create `www.easyserveng.com.easyserveng.com`,
+which resolves for nobody. **Save one record, then check how the panel displays it
+back to you** — the saved list shows the true name, and it is the only reliable
+way to tell which convention you are in. Fix the first one before adding the other
+two.
+
+Two more things the form may ask:
+
+- **TTL**: `3600` if offered. If there is no TTL field, WHMCS is managing it;
+  that is fine.
+- **Priority**: only used by `MX`. Leave blank or `0`.
+
+Why the root is an `A` and not a `CNAME`: DNS does not allow a CNAME on the root
+of a domain alongside the NS records that have to live there. Vercel publishes
+`76.76.21.21` as a fixed anycast address for exactly this reason. Subdomains have
+no such restriction, which is why `www` and `api` are CNAMEs.
+
+### 1d. Confirm before moving on
+
+```sh
+curl -s -H 'accept: application/dns-json' \
+  'https://cloudflare-dns.com/dns-query?name=easyserveng.com&type=A'
+```
+
+Looking for `"Status": 0` and `"data": "76.76.21.21"`. Then the same for
+`www.` and `api.`.
+
+`"Status": 2` means the zone is still not being served — back to 1a. `"Status": 3`
+means it resolves but that name has no record, which is a typo in the Name field
+— back to 1c.
+
+Give it 15–30 minutes after saving. If a record was queried while wrong, the bad
+answer may be cached for up to its TTL.
+
+### 1e. If the Truehost panel fights you
+
+Truehost's DNS editor is limited, and their nameservers have already proved slow
+to serve a new zone. A common alternative is to keep Truehost as the **registrar**
+and move DNS to Cloudflare, which is free:
+
+1. Add `easyserveng.com` as a site in Cloudflare; it imports what it can find.
+2. Add the three records above, and set each to **DNS only** — the grey cloud,
+   not the orange one.
+3. In Truehost: **Domains → My Domains → easyserveng.com → Nameservers**, and
+   replace the Cloudoon entries with the two Cloudflare gives you.
+
+Keep the proxy off. Proxying works, but Cloudflare then terminates TLS itself and
+will not pass a WebSocket upgrade through on the free plan without care — so
+orders stop reaching the bar screen while every page still loads. That is the
+hardest failure in this whole document to diagnose, and turning the proxy on is
+the only way to cause it.
+
+This is optional. The records in 1c are the same either way.
+
+---
+
+One more thing, once you reach step 3: Render shows you the exact CNAME target
+for `api` when you add the custom domain. If it differs from
+`easyserve-demo-api.onrender.com`, use Render's value and update the record.
 
 ## 2. Vercel
 
