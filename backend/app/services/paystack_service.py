@@ -22,6 +22,26 @@ def is_enabled() -> bool:
     return bool(settings.PAYSTACK_SECRET_KEY)
 
 
+def mode() -> str:
+    """"test", "live", or "unknown" — never the key itself.
+
+    Read from the prefix Paystack documents on its keys. The guest bill shows
+    this, because "is this real money?" is a question somebody testing the
+    system has to be able to answer by looking at the screen. Asking a colleague
+    is how a real card ends up in a test, and how a test card ends up being
+    reported as a bug when it is declined against a live account.
+
+    "unknown" covers a key that is set but in neither documented shape, which is
+    worth surfacing as itself rather than quietly assuming either answer.
+    """
+    key = settings.PAYSTACK_SECRET_KEY or ""
+    if key.startswith("sk_test_"):
+        return "test"
+    if key.startswith("sk_live_"):
+        return "live"
+    return "unknown"
+
+
 def verify_webhook_signature(raw_body: bytes, signature: str | None) -> bool:
     """Paystack signs the raw request body with HMAC-SHA512 of the secret key."""
     if not signature or not is_enabled():

@@ -228,7 +228,11 @@ async def payment_options(session_token: str, db: AsyncSession = Depends(get_db)
     """
     from app.services import paystack_service
 
-    return {"online": paystack_service.is_enabled()}
+    return {
+        "online": paystack_service.is_enabled(),
+        # So the bill can say plainly whether real money is involved.
+        "mode": paystack_service.mode(),
+    }
 
 
 @router.post("/pay/{session_token}")

@@ -68,6 +68,9 @@ export default function BillPage({
   const [comment, setComment] = useState("");
   const [paying, setPaying] = useState(false);
   const [canPayOnline, setCanPayOnline] = useState<boolean | null>(null);
+  // "test" | "live" | "unknown". Shown to the guest when it is not live, so
+  // nobody has to ask a colleague whether real money is about to move.
+  const [payMode, setPayMode] = useState<string | null>(null);
   const [splitBy, setSplitBy] = useState(1);
 
   function load() {
@@ -81,7 +84,10 @@ export default function BillPage({
   useEffect(() => {
     api
       .get(`/customer/pay-options/${session_token}`)
-      .then((r) => setCanPayOnline(Boolean(r.data?.online)))
+      .then((r) => {
+        setCanPayOnline(Boolean(r.data?.online));
+        setPayMode(typeof r.data?.mode === "string" ? r.data.mode : null);
+      })
       .catch(() => setCanPayOnline(false));
   }, [session_token]);
 
@@ -399,6 +405,24 @@ export default function BillPage({
                 <CreditCard size={16} />
                 {paying ? "Opening secure checkout…" : "Pay Online — Transfer / Card / USSD"}
               </button>
+            )}
+
+            {/* Said on the screen rather than in a briefing document. A tester
+                who cannot tell which mode they are in either puts a real card
+                into a test, or reports a declined test card as a fault. */}
+            {canPayOnline && payMode && payMode !== "live" && (
+              <p
+                className="text-xs text-center px-4 py-2 rounded-xl"
+                style={{
+                  color: "var(--amber)",
+                  background: "rgba(255,149,0,0.07)",
+                  border: "1px solid rgba(255,149,0,0.22)",
+                }}
+              >
+                {payMode === "test"
+                  ? "Test mode — no real money will be taken. Use a test card only."
+                  : "Payment provider not fully configured — do not use a real card."}
+              </p>
             )}
             <div
               className="rounded-2xl px-5 py-4 flex items-center gap-3"
