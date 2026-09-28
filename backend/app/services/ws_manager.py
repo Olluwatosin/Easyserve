@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import time
 from collections import defaultdict
 from typing import Dict, Set
 
@@ -40,8 +41,33 @@ class ConnectionManager:
         if self._redis:
             await self._redis.aclose()
 
+    #: How long to wait between reconnection attempts, at most. Redis being
+    #: absent is a supported configuration — a single instance broadcasts
+    #: correctly without it — so there is no hurry, and retrying every half
+    #: minute forever costs more in log noise than it buys in recovery speed.
+    _MAX_RETRY_DELAY = 300.0
+
+    #: Where the backoff starts. A named attribute rather than a literal so the
+    #: retry behaviour can be exercised without a test sleeping through it.
+    _INITIAL_RETRY_DELAY = 1.0
+
+    #: How often to repeat the warning while Redis stays unreachable. Often
+    #: enough that a genuine outage is visible in a log people skim, rare enough
+    #: that it does not bury everything else in it.
+    _REWARN_AFTER = 1800.0
+
     async def _listen_forever(self, redis_url: str) -> None:
-        delay = 1.0
+        """Keep a pub/sub subscription up, and say so exactly as often as helps.
+
+        This used to log a warning every thirty seconds for as long as Redis was
+        absent — around 2,880 a day on a deployment that has no Redis and is not
+        meant to. Logs like that train you to ignore them, which costs you the
+        one line that mattered. The condition is now stated once when it starts,
+        again if a working connection drops, and then twice an hour.
+        """
+        delay = self._INITIAL_RETRY_DELAY
+        failures = 0
+        last_warned = 0.0
         while True:
             try:
                 redis = aioredis.from_url(redis_url, decode_responses=True)
@@ -49,7 +75,14 @@ class ConnectionManager:
                 pubsub = redis.pubsub()
                 await pubsub.subscribe(_CHANNEL)
                 self._redis = redis
-                delay = 1.0
+                if failures:
+                    logger.info(
+                        "Redis reachable again after %d attempt(s) — "
+                        "cross-instance WebSocket delivery restored",
+                        failures,
+                    )
+                failures = 0
+                delay = self._INITIAL_RETRY_DELAY
                 logger.info("WebSocket Redis pub/sub connected on %s", redis_url)
                 async for message in pubsub.listen():
                     if message["type"] != "message":
@@ -61,12 +94,30 @@ class ConnectionManager:
             except asyncio.CancelledError:
                 raise
             except Exception:
+                # A connection that *was* up and has dropped is worth saying out
+                # loud every time, because it means something changed.
+                was_connected = self._redis is not None
                 self._redis = None
-                logger.warning(
-                    "Redis unavailable — single-instance WS mode; retrying in %.0fs", delay
-                )
+                failures += 1
+                now = time.monotonic()
+                if failures == 1 or was_connected or now - last_warned >= self._REWARN_AFTER:
+                    logger.warning(
+                        "Redis unavailable — running in single-instance WebSocket "
+                        "mode (attempt %d). Broadcasts are still delivered to "
+                        "everyone connected to this instance; a second instance "
+                        "would not see them. Retrying in %.0fs.",
+                        failures,
+                        delay,
+                    )
+                    last_warned = now
+                else:
+                    logger.debug(
+                        "Redis still unavailable (attempt %d); retrying in %.0fs",
+                        failures,
+                        delay,
+                    )
                 await asyncio.sleep(delay)
-                delay = min(delay * 2, 30.0)
+                delay = min(delay * 2, self._MAX_RETRY_DELAY)
 
     # ── Connect / Disconnect ─────────────────────────────────────────────────
 
