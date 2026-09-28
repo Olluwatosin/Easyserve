@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/stores/auth";
+import { signInError } from "@/lib/authError";
 import { getRoleHome } from "@/components/AuthGuard";
 import { Eye, EyeOff } from "lucide-react";
 import toast from "react-hot-toast";
@@ -62,10 +63,10 @@ export default function LoginPage() {
       const user = useAuthStore.getState().user!;
       router.replace(getRoleHome(user.role));
     } catch (err: unknown) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data
-          ?.detail ?? "Login failed";
-      toast.error(msg);
+      // "Login failed" used to be the fallback here, and it fired exactly when
+      // the request never reached the API — so a network problem looked like a
+      // rejected password. See signInError.
+      toast.error(signInError(err));
     }
   }
 
