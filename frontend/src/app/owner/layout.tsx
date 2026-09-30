@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Clock, BarChart3, Menu, LayoutDashboard, LogOut, Moon, Package, Settings, ShoppingBag, Table2, Tag, Users, UtensilsCrossed,
   FileDown,
+  Activity,
 } from "lucide-react";
 import AuthGuard from "@/components/AuthGuard";
 import { EsLogo } from "@/components/EsLogo";
@@ -23,6 +24,7 @@ const nav = [
   { href: "/owner/timesheet", label: "Hours", icon: Clock },
   { href: "/owner/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/owner/reports", label: "Reports", icon: FileDown },
+  { href: "/owner/activity", label: "Activity", icon: Activity },
   { href: "/owner/settings", label: "Settings", icon: Settings },
 ];
 

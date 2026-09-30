@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.models.user import User
+from app.services.audit_service import log_action
 from app.models.venue import Venue
 from app.schemas.auth import RegisterRequest, LoginRequest, PinLoginRequest, TokenResponse
 from app.utils.security import hash_password, verify_password, create_access_token, create_refresh_token, decode_token, token_is_revoked
@@ -56,6 +57,42 @@ async def register(db: AsyncSession, req: RegisterRequest) -> TokenResponse:
     )
 
 
+async def _record_sign_in(db: AsyncSession, user: User, method: str) -> None:
+    """Note that somebody signed in, and how.
+
+    Every money-touching action was already audited; arriving was not, so there
+    was no way to answer "has anyone actually opened this yet". That question
+    matters twice: during a pilot, when logins have been handed out and nobody
+    knows whether they were used, and afterwards, when an owner wants to know
+    who was on the floor before a void.
+
+    Deliberately only successes. Logging failed attempts would fill the trail
+    with mistyped PINs on a busy night, and the interesting failures — a wrong
+    password against a real account, over and over — are what the rate limiter
+    exists for.
+
+    Never records the PIN, the password, or anything derived from either.
+
+    A failure here must not stop somebody signing in: an audit row is worth less
+    than a bartender getting to the till, so the commit is guarded.
+    """
+    from sqlalchemy.exc import SQLAlchemyError
+
+    log_action(
+        db,
+        venue_id=user.venue_id,
+        actor_id=user.id,
+        action="signed_in",
+        entity_type="user",
+        entity_id=user.id,
+        details={"method": method, "role": user.role, "name": user.full_name},
+    )
+    try:
+        await db.commit()
+    except SQLAlchemyError:
+        await db.rollback()
+
+
 async def login(db: AsyncSession, req: LoginRequest) -> TokenResponse:
     """Sign in with an email address and a password, and say which one was wrong.
 
@@ -100,6 +137,8 @@ async def login(db: AsyncSession, req: LoginRequest) -> TokenResponse:
     if not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Wrong password")
 
+    await _record_sign_in(db, user, method="password")
+
     token_data = {"sub": user.id, "venue_id": user.venue_id, "role": user.role}
     return TokenResponse(
         access_token=create_access_token(token_data),
@@ -128,6 +167,7 @@ async def pin_login(db: AsyncSession, req: PinLoginRequest) -> TokenResponse:
     )
     for user in result.scalars().all():
         if verify_password(req.pin, user.pin_hash):
+            await _record_sign_in(db, user, method="pin")
             token_data = {"sub": user.id, "venue_id": user.venue_id, "role": user.role}
             return TokenResponse(
                 access_token=create_access_token(token_data),

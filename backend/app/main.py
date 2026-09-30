@@ -49,6 +49,7 @@ from app.routers import (
     stock,
     exports,
     nights,
+    activity,
 )
 from app.services.ws_manager import manager
 
@@ -112,6 +113,7 @@ app.include_router(demo.router, prefix="/api/v1")
 app.include_router(stock.router, prefix="/api/v1")
 app.include_router(exports.router, prefix="/api/v1")
 app.include_router(nights.router, prefix="/api/v1")
+app.include_router(activity.router, prefix="/api/v1")
 app.include_router(websocket.router)
 
 
