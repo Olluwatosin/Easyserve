@@ -49,29 +49,77 @@ jobs:
             exit 1
           fi
           echo "Pinging: [$API/health]"
-          # A cold start is exactly the case we are paying for, and two can stack:
-          # Render wakes the container (~35-55s) and Neon wakes the branch from
-          # scale-to-zero on the first query, which the boot-time migration makes.
-          # A single 90s attempt is not enough headroom, so retry with a real budget.
-          code=000
-          for attempt in 1 2 3 4 5; do
-            code=$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 120 "$API/health") || code=000
-            if [ "$code" = "200" ]; then
-              echo "Awake after attempt $attempt"
-              break
-            fi
-            echo "Attempt $attempt: HTTP $code — still waking, retrying in 15s"
-            sleep 15
-          done
+
+          # ── One patient probe, not a retry loop ────────────────────────────
+          #
+          # This used to fire five attempts 120s apart, and on a sleeping
+          # instance that made things worse rather than better. The first request
+          # starts Render provisioning the container; every request piled on
+          # behind it while that was still happening came back 429 from Render's
+          # edge. The job then declared the backend unhealthy — about a service
+          # that was merely asleep and answered fine moments later. One false
+          # alarm at 9:56pm is how a monitor teaches you to ignore it.
+          #
+          # Two cold starts can stack: Render waking the container (~35-55s) and
+          # Neon waking the branch from scale-to-zero on the first query. So the
+          # budget is generous and the gaps are wide enough that the container
+          # has genuinely finished starting before anything else is sent.
+          probe() {
+            # The response body is cleared first. curl leaves the previous one in
+            # place when it cannot connect, which put a healthy {"status":"ok"}
+            # in the log directly above an error about the service being down.
+            rm -f /tmp/health.json
+            # curl itself prints 000 through -w when it never got a response, so
+            # `|| echo 000` on top of that produced "HTTP 000000". The guard is
+            # only for a curl that fails before writing anything at all.
+            local out
+            out=$(curl -sS -o /tmp/health.json -w '%{http_code}' --max-time 180 "$API/health" 2>/dev/null) || true
+            printf '%s' "${out:-000}"
+          }
+
+          started=$(date +%s)
+          code=$(probe)
+          if [ "$code" != "200" ]; then
+            echo "First probe: HTTP $code - waiting 45s for the container to finish starting"
+            sleep 45
+            code=$(probe)
+          fi
+          if [ "$code" != "200" ]; then
+            echo "Second probe: HTTP $code - one last try in 60s"
+            sleep 60
+            code=$(probe)
+          fi
+          took=$(( $(date +%s) - started ))
+
           cat /tmp/health.json 2>/dev/null || true
           echo
-          # curl reports 000 when it never got a response at all (timeout / no
-          # connection). 503 means the app is up but Postgres is unreachable —
-          # that one is a genuinely broken demo, not merely a sleeping one.
-          if [ "$code" != "200" ]; then
-            echo "::error::Demo backend unhealthy after 5 attempts (last: HTTP $code)"
+
+          # ── What counts as a problem ───────────────────────────────────────
+          #
+          # 200 after a long wait means it was asleep and is now awake. On a free
+          # instance that is the expected state rather than a fault, so it does
+          # not fail the job — but it is still said out loud, because a tester
+          # hitting that same cold start waits the same 50 seconds and concludes
+          # the product is slow.
+          #
+          # 503 is the one that matters: the app is answering but cannot reach
+          # Postgres. That is a broken demo and it will not fix itself.
+          if [ "$code" = "200" ]; then
+            if [ "$took" -gt 20 ]; then
+              echo "::warning::Demo was asleep - took ${took}s to answer. A tester hitting it cold waits the same. GitHub fires this schedule every few hours rather than every 10 minutes, so it cannot keep the instance warm; a paid instance or an external 5-minute pinger is the actual fix."
+            else
+              echo "Awake and warm (${took}s)"
+            fi
+            exit 0
+          fi
+
+          if [ "$code" = "503" ]; then
+            echo "::error::Demo backend is up but its database is unreachable (HTTP 503)"
             exit 1
           fi
+
+          echo "::error::Demo backend did not answer after ${took}s (last: HTTP $code)"
+          exit 1
 
   reset:
     name: Reseed the demo venue
