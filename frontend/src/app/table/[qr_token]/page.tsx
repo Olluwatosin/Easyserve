@@ -5,6 +5,7 @@ import Image from "next/image";
 import { publicApi as api } from "@/lib/publicApi";
 import { useOrderStore } from "@/stores/order";
 import { formatNGN } from "@/lib/utils";
+import { mintSession, openSession } from "@/lib/guestSession";
 import { Plus, Minus, Bell, X, Tag, ChevronRight, Check, Receipt } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -1044,7 +1045,16 @@ export default function CustomerMenuPage({
                   >
                     <Check size={22} style={{ color: "var(--teal)" }} />
                   </div>
-                  <p className="font-display font-bold text-base mb-1" style={{ color: "var(--teal)" }}>
+                  {/* Announced as well as shown. This text replaces the cart
+                      after a tap, so without a live region a screen-reader user
+                      gets silence exactly where everybody else is told their
+                      order reached the bar. */}
+                  <p
+                    className="font-display font-bold text-base mb-1"
+                    style={{ color: "var(--teal)" }}
+                    role="status"
+                    aria-live="polite"
+                  >
                     {sentTo === "both"
                       ? "Sent to the bar and kitchen!"
                       : sentTo === "kitchen"
@@ -1218,64 +1228,4 @@ export default function CustomerMenuPage({
       )}
     </div>
   );
-}
-
-// ── Sessions: one per table, one per visit ───────────────────────────────────
-//
-// A session token is what ties a guest's phone to a bill. It used to be a
-// single value under one key, minted once and never cleared, which was wrong in
-// two ways that both showed up as "the order screen keeps growing".
-//
-// **It was shared across tables.** One phone scanning table 3 and later table 7
-// put both tables' rounds on one bill. Not mess — a wrong bill.
-//
-// **It never ended.** Nothing cleared it, so the visit after the one you paid
-// for opened on top of the last one, and the one after that on top of both.
-// Eventually a guest sits down to a receipt for a night they have gone home
-// from. Keying per table fixes the first; the other two rules below end a visit:
-//
-// * the venue's business day rolled over (6AM, same boundary as everything
-//   else), so anything still open belongs to a night that is over;
-// * everything on the session has been paid for, which the menu response
-//   reports back as `settled`. That is the real end of a visit, and it is the
-//   server's call rather than the phone's — the phone does not know whether
-//   somebody settled at the bar.
-
-const SESSION_PREFIX = "es_session:";
-
-/** Tonight's date at the venue. Before 6AM that is still yesterday. */
-function businessNight(): string {
-  const d = new Date();
-  d.setHours(d.getHours() - 6);
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-}
-
-function mintSession(qr: string): string {
-  const token = crypto.randomUUID();
-  try {
-    localStorage.setItem(
-      SESSION_PREFIX + qr,
-      JSON.stringify({ token, night: businessNight() }),
-    );
-  } catch {
-    // Private browsing, or storage full. The visit still works — it just will
-    // not survive a reload, which is better than refusing to take an order.
-  }
-  return token;
-}
-
-/** The token for this table's current visit, starting a new one if the last
- *  belongs to a night that is over. */
-function openSession(qr: string): string {
-  if (typeof window === "undefined") return "";
-  try {
-    const raw = localStorage.getItem(SESSION_PREFIX + qr);
-    if (raw) {
-      const saved = JSON.parse(raw) as { token?: string; night?: string };
-      if (saved.token && saved.night === businessNight()) return saved.token;
-    }
-  } catch {
-    /* unreadable or from an older shape — start clean */
-  }
-  return mintSession(qr);
 }

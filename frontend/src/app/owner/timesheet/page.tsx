@@ -363,7 +363,7 @@ function FixShift({
               {shift.night}
             </p>
           </div>
-          <button onClick={onClose} style={{ color: "var(--muted)" }}>
+          <button aria-label="Close" onClick={onClose} style={{ color: "var(--muted)" }}>
             <X size={16} />
           </button>
         </div>

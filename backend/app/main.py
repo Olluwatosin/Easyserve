@@ -50,6 +50,7 @@ from app.routers import (
     exports,
     nights,
     activity,
+    telemetry,
 )
 from app.services.ws_manager import manager
 
@@ -146,6 +147,7 @@ app.include_router(stock.router, prefix="/api/v1")
 app.include_router(exports.router, prefix="/api/v1")
 app.include_router(nights.router, prefix="/api/v1")
 app.include_router(activity.router, prefix="/api/v1")
+app.include_router(telemetry.router, prefix="/api/v1")
 app.include_router(websocket.router)
 
 
@@ -165,6 +167,8 @@ async def health():
     from app.database import AsyncSessionLocal
     from app.services.ws_manager import manager as ws_manager
 
+    from app.services import image_store
+
     db_ok = True
     try:
         async with AsyncSessionLocal() as session:
@@ -177,5 +181,9 @@ async def health():
         "version": "5.0.0",
         "db": "up" if db_ok else "down",
         "redis": "up" if ws_manager._redis is not None else "down",
+        # Says where menu photos go. "local-disk" on a container means they are
+        # deleted on the next deploy, which is worth being able to see from
+        # outside rather than discovering when an owner's menu goes blank.
+        "images": image_store.describe(),
     }
     return JSONResponse(status_code=200 if db_ok else 503, content=body)

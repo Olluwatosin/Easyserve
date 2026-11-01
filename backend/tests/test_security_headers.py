@@ -11,6 +11,28 @@ about to be sold to a hotel group.
 import pytest
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _release_the_engine():
+    """Hand the database engine back when this module is done.
+
+    These are synchronous tests driving the app through TestClient, and any
+    request that touches the database binds the global engine's connection pool
+    to TestClient's event loop. The async suites each get their own loop, so a
+    module that runs afterwards finds a pool bound to a loop that has closed and
+    reports "no database available" — eight tests in another file started
+    skipping silently when this module was added, which is worse than failing.
+
+    The async suites already dispose on teardown. This does the same from a
+    sync fixture.
+    """
+    yield
+    import asyncio
+
+    from app.database import engine
+
+    asyncio.run(engine.dispose())
+
+
 @pytest.fixture
 def client():
     from fastapi.testclient import TestClient

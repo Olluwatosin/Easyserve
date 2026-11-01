@@ -79,7 +79,7 @@ function PasswordIssued({
           boxShadow: "0 32px 80px rgba(0,0,0,0.6)",
         }}
       >
-        <button
+        <button aria-label="Close"
           onClick={onClose}
           className="absolute top-4 right-4 p-1.5 rounded-lg"
           style={{ color: "var(--muted)" }}
@@ -228,7 +228,7 @@ function PinModal({
           boxShadow: "0 32px 80px rgba(0,0,0,0.6)",
         }}
       >
-        <button
+        <button aria-label="Close"
           onClick={onClose}
           className="absolute top-4 right-4 p-1.5 rounded-lg transition-colors"
           style={{ color: "var(--muted)" }}

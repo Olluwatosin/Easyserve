@@ -22,6 +22,7 @@ import toast from "react-hot-toast";
 
 import { api } from "@/lib/api";
 import { formatNGN } from "@/lib/utils";
+import { useDialog } from "@/lib/useDialog";
 
 type ItemType = "drink" | "food" | "other";
 
@@ -123,8 +124,10 @@ export function MenuImport({
     }
   }
 
+  const dialog = useDialog(onClose, "Import a menu");
+
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto" style={{ background: "var(--bg)" }}>
+    <div {...dialog.props} className="fixed inset-0 z-50 overflow-y-auto" style={{ background: "var(--bg)" }}>
       <div
         className="sticky top-0 z-20 px-4 py-3 flex items-center gap-3"
         style={{ background: "var(--bg)", borderBottom: "1px solid #1E2D42" }}

@@ -78,7 +78,7 @@ jobs:
 
   # ── Frontend ───────────────────────────────────────────────────────────────
   frontend:
-    name: Frontend — lint & build
+    name: Frontend — lint, test & build
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -97,6 +97,12 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      # The money logic now lives partly in the browser — the cart, the guest
+      # session rules, the offline queue — and none of it was covered. Run here
+      # so it cannot rot quietly.
+      - name: Test
+        run: npm test
 
       - name: Build
         run: npm run build

@@ -182,11 +182,24 @@ async def upload_image(
     except Exception:
         raise HTTPException(400, "Could not process image — is the file corrupt?")
 
-    filename = f"{_uuid.uuid4()}.webp"
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    (UPLOAD_DIR / filename).write_bytes(processed)
-    base = str(request.base_url).rstrip("/")
-    return {"url": f"{base}/static/uploads/{filename}"}
+    # Durable storage where it is configured, local disk otherwise. Uploads used
+    # to go only to the container filesystem, which does not survive a restart —
+    # so every photo an owner took vanished on the next deploy and the menu
+    # filled with broken images. See services/image_store.
+    from app.services import image_store
+
+    try:
+        stored = await image_store.put_image(processed)
+    except Exception:
+        raise HTTPException(
+            502, "Could not store the image — please try again in a moment"
+        )
+
+    # A relative path means the local store; serve it from this host. A remote
+    # store returns an absolute URL and is used as-is.
+    if stored.startswith("/"):
+        stored = f"{str(request.base_url).rstrip('/')}{stored}"
+    return {"url": stored, "storage": image_store.describe()}
 
 
 # ── Categories ────────────────────────────────────────────────────────────────
