@@ -3,8 +3,13 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { MenuImport } from "@/components/MenuImport";
+import { MenuItemsTable } from "@/components/MenuItemsTable";
+import { COLUMN_LABEL, nextSort, type SortDirection, type SortKey } from "@/lib/menuSort";
 import { formatNGN } from "@/lib/utils";
-import { Camera, FileUp, Plus, Edit2, Trash2, ToggleLeft, ToggleRight, GripVertical, X } from "lucide-react";
+// GripVertical is gone with the fake drag handle it used to draw, and the
+// availability toggles moved into MenuItemsTable. Edit2 and Trash2 stay: the
+// categories view below still uses them.
+import { Camera, Edit2, FileUp, Plus, Trash2, X } from "lucide-react";
 import toast from "react-hot-toast";
 
 interface Category { id: string; name: string; sort_order: number; }
@@ -175,6 +180,51 @@ export default function MenuPage() {
     if (!confirm("Delete this category?")) return;
     await api.delete(`/menu/categories/${id}`);
     load();
+  }
+
+  // ── Collapsing and sorting ────────────────────────────────────────────────
+  //
+  // Both are per-owner view state, not data: nothing here changes what a guest
+  // sees. Which sections are closed is remembered, because a venue with a long
+  // menu closes the same ones every time and having them spring open on each
+  // visit is its own small irritation. The sort is not remembered — it is
+  // answering a question right now ("what is nearly out?"), and a menu that
+  // loads in last week's order is confusing rather than helpful.
+  const COLLAPSE_KEY = "menu_collapsed_sections";
+
+  const [closed, setClosed] = useState<Set<string>>(new Set());
+  const [sortedBy, setSortedBy] = useState<{
+    key: SortKey | null;
+    direction: SortDirection;
+  }>({ key: null, direction: "asc" });
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(COLLAPSE_KEY);
+      if (saved) setClosed(new Set(JSON.parse(saved) as string[]));
+    } catch {
+      /* unreadable or from an older shape — start with everything open */
+    }
+  }, []);
+
+  const isCollapsed = (id: string) => closed.has(id);
+
+  function toggleCollapsed(id: string) {
+    setClosed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try {
+        localStorage.setItem(COLLAPSE_KEY, JSON.stringify(Array.from(next)));
+      } catch {
+        /* private browsing — it just will not be remembered */
+      }
+      return next;
+    });
+  }
+
+  function applySort(key: SortKey) {
+    setSortedBy((current) => nextSort(current, key));
   }
 
   const categorisedItems = categories.map((cat) => ({
@@ -503,156 +553,43 @@ export default function MenuPage() {
       {/* ── Items view ── */}
       {activeTab === "items" && (
         <div className="space-y-6">
-          {categorisedItems.map((cat) => (
-            cat.items.length > 0 && (
-              <div key={cat.id}>
-                <div className="flex items-center gap-3 mb-3">
-                  <h2 className="font-display font-semibold text-text">{cat.name}</h2>
-                  <span className="badge-muted">{cat.items.length}</span>
-                </div>
-                <div className="card overflow-hidden p-0">
-                  <table className="w-full text-sm">
-                    <tbody>
-                      {cat.items.map((item, idx) => (
-                        <tr
-                          key={item.id}
-                          className={`${idx > 0 ? "border-t border-border" : ""} hover:bg-bg-hover/40`}
-                        >
-                          <td className="px-4 py-3 w-8">
-                            <GripVertical size={14} className="text-muted/40" />
-                          </td>
-                          <td className="px-3 py-2.5 w-12">
-                            {item.image_url ? (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={item.image_url}
-                                alt={item.name}
-                                className="w-10 h-10 rounded-lg object-cover"
-                                style={{ border: "1px solid rgba(255,255,255,0.08)" }}
-                              />
-                            ) : (
-                              <div
-                                className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
-                                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
-                              >
-                                {item.item_type === "drink" ? "🍸" : item.item_type === "food" ? "🍽️" : "✨"}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <p className="text-text font-medium">{item.name}</p>
-                            {item.description && (
-                              <p className="text-muted text-xs mt-0.5">{item.description}</p>
-                            )}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span className={`badge-${item.item_type === "drink" ? "teal" : item.item_type === "food" ? "amber" : "muted"}`}>
-                              {item.item_type}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-text font-semibold tabular-nums">
-                            {formatNGN(item.price)}
-                          </td>
-                          <td className="px-4 py-3 text-muted text-xs">
-                            {item.order_count > 0 ? `${item.order_count} orders` : "—"}
-                          </td>
-                          <td className="px-4 py-3">
-                            <button
-                              onClick={() => toggleAvailability(item)}
-                              title={item.is_available ? "Mark unavailable" : "Mark available"}
-                            >
-                              {item.is_available
-                                ? <ToggleRight size={22} className="text-teal" />
-                                : <ToggleLeft size={22} className="text-muted" />}
-                            </button>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex gap-1">
-                              <button onClick={() => openEditItem(item)} className="p-1.5 text-muted hover:text-teal rounded-lg transition-colors">
-                                <Edit2 size={14} />
-                              </button>
-                              <button onClick={() => deleteItem(item.id)} className="p-1.5 text-muted hover:text-red-400 rounded-lg transition-colors">
-                                <Trash2 size={14} />
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )
-          ))}
-
-          {/* Uncategorised */}
-          {uncategorised.length > 0 && (
-            <div>
-              <div className="flex items-center gap-3 mb-3">
-                <h2 className="font-display font-semibold text-muted">Uncategorised</h2>
-                <span className="badge-muted">{uncategorised.length}</span>
-              </div>
-              <div className="card overflow-hidden p-0">
-                <table className="w-full text-sm">
-                  <tbody>
-                    {uncategorised.map((item, idx) => (
-                      <tr key={item.id} className={`${idx > 0 ? "border-t border-border" : ""} hover:bg-bg-hover/40`}>
-                        <td className="px-4 py-3 w-8">
-                          <GripVertical size={14} className="text-muted/40" />
-                        </td>
-                        <td className="px-3 py-2.5 w-12">
-                          {item.image_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={item.image_url}
-                              alt={item.name}
-                              className="w-10 h-10 rounded-lg object-cover"
-                              style={{ border: "1px solid rgba(255,255,255,0.08)" }}
-                            />
-                          ) : (
-                            <div
-                              className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
-                              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}
-                            >
-                              {item.item_type === "drink" ? "🍸" : item.item_type === "food" ? "🍽️" : "✨"}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <p className="text-text font-medium">{item.name}</p>
-                          {item.description && <p className="text-muted text-xs mt-0.5">{item.description}</p>}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className={`badge-${item.item_type === "drink" ? "teal" : item.item_type === "food" ? "amber" : "muted"}`}>
-                            {item.item_type}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-text font-semibold tabular-nums">{formatNGN(item.price)}</td>
-                        <td className="px-4 py-3 text-muted text-xs">{item.order_count > 0 ? `${item.order_count} orders` : "—"}</td>
-                        <td className="px-4 py-3">
-                          <button onClick={() => toggleAvailability(item)}>
-                            {item.is_available ? <ToggleRight size={22} className="text-teal" /> : <ToggleLeft size={22} className="text-muted" />}
-                          </button>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex gap-1">
-                            <button onClick={() => openEditItem(item)} className="p-1.5 text-muted hover:text-teal rounded-lg transition-colors"><Edit2 size={14} /></button>
-                            <button onClick={() => deleteItem(item.id)} className="p-1.5 text-muted hover:text-red-400 rounded-lg transition-colors"><Trash2 size={14} /></button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+          {sortedBy.key && (
+            <p className="text-xs" style={{ color: "var(--muted)" }}>
+              Sorted by {COLUMN_LABEL[sortedBy.key].toLowerCase()} — this changes
+              what you see here, not the order guests see on their menu.
+            </p>
           )}
 
-          {items.length === 0 && (
-            <div className="card text-center py-12">
-              <p className="text-muted">No menu items yet.</p>
-              <button onClick={openAddItem} className="btn-teal mt-4">Add your first item</button>
-            </div>
+          {categorisedItems.map((cat) =>
+            cat.items.length > 0 ? (
+              <MenuItemsTable
+                key={cat.id}
+                title={cat.name}
+                items={cat.items}
+                collapsed={isCollapsed(cat.id)}
+                onToggleCollapsed={() => toggleCollapsed(cat.id)}
+                sort={sortedBy}
+                onSort={applySort}
+                onEdit={openEditItem}
+                onDelete={deleteItem}
+                onToggleAvailability={toggleAvailability}
+              />
+            ) : null,
+          )}
+
+          {uncategorised.length > 0 && (
+            <MenuItemsTable
+              title="Uncategorised"
+              items={uncategorised}
+              collapsed={isCollapsed("__uncategorised__")}
+              onToggleCollapsed={() => toggleCollapsed("__uncategorised__")}
+              sort={sortedBy}
+              onSort={applySort}
+              onEdit={openEditItem}
+              onDelete={deleteItem}
+              onToggleAvailability={toggleAvailability}
+              muted
+            />
           )}
         </div>
       )}
