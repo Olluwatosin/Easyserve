@@ -29,6 +29,37 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
+#: How long a socket ticket is good for. Long enough to cover a slow connect on
+#: a venue's wifi, short enough that one sitting in a proxy log is worthless by
+#: the time anybody reads it.
+WS_TICKET_SECONDS = 30
+
+
+def create_ws_ticket(data: dict) -> str:
+    """A short-lived credential for opening a WebSocket.
+
+    A browser cannot set headers on a WebSocket handshake, so the only places a
+    credential can go are the URL or the first frame after connecting. The URL
+    is simpler and was what this used — with the full access token, which then
+    appeared in proxy and platform logs with an hour of life left on it.
+
+    This carries the same claims and expires in thirty seconds, so what lands in
+    a log is useless almost immediately. Marked with its own type so a ticket
+    cannot be replayed against the HTTP API, and an access token cannot be used
+    to open a socket.
+    """
+    to_encode = data.copy()
+    now = datetime.now(timezone.utc)
+    to_encode.update(
+        {
+            "exp": now + timedelta(seconds=WS_TICKET_SECONDS),
+            "iat": now,
+            "type": "ws_ticket",
+        }
+    )
+    return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+
+
 def create_refresh_token(data: dict) -> str:
     to_encode = data.copy()
     now = datetime.now(timezone.utc)

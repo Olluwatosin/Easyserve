@@ -25,9 +25,10 @@
  * caught rather than shipped.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { WS_URL } from "@/lib/env";
+import { api } from "@/lib/api";
 import { useReconnectingWS, type WSStatus } from "@/lib/ws";
 
 export interface VenueEvent {
@@ -103,12 +104,44 @@ export function useVenueChannel(
   venueId: string | null | undefined,
   handlers: VenueChannelHandlers,
 ): WSStatus {
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  // A thirty-second ticket rather than the access token itself.
+  //
+  // A browser cannot set a header on a WebSocket handshake, so the credential
+  // has to go in the URL — and query strings are written to proxy and platform
+  // logs as a matter of course. Sending the access token put an hour-long
+  // credential in those logs on every connect. A ticket is useless by the time
+  // anybody reads it.
+  //
+  // Fetched fresh on each connect, including reconnects, because a ticket is
+  // expired long before a socket that dropped overnight comes back.
+  const [ticket, setTicket] = useState<string | null>(null);
+  const haveSession =
+    typeof window !== "undefined" && !!localStorage.getItem("access_token");
+
+  useEffect(() => {
+    if (!venueId || !haveSession) {
+      setTicket(null);
+      return;
+    }
+    let live = true;
+    api
+      .post<{ ticket: string }>("/auth/ws-ticket")
+      .then((r) => {
+        if (live) setTicket(r.data.ticket);
+      })
+      .catch(() => {
+        // No ticket means no live updates, which is a degraded screen rather
+        // than a broken one — the pages all re-fetch on their own as well.
+        if (live) setTicket(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [venueId, haveSession]);
 
   const url = useMemo(
-    () => (venueId && token ? `${WS_URL}/ws/${venueId}?token=${token}` : null),
-    [venueId, token],
+    () => (venueId && ticket ? `${WS_URL}/ws/${venueId}?token=${ticket}` : null),
+    [venueId, ticket],
   );
 
   // Handlers are read through a ref inside useReconnectingWS, so an inline

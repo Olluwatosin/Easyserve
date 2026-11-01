@@ -158,3 +158,75 @@ def test_the_guest_channel_needs_only_the_session_token():
     the credential, as it is for reading their own bill."""
     client = _client()
     assert _opens(client, f"/ws/customer/{uuid.uuid4().hex}", None)
+
+
+# ── Short-lived tickets, so a credential in a URL stops mattering ────────────
+
+
+def _ticket(role: str, venue_id: str) -> str:
+    from app.utils.security import create_ws_ticket
+    return create_ws_ticket(
+        {"sub": str(uuid.uuid4()), "venue_id": venue_id, "role": role}
+    )
+
+
+def test_a_ticket_opens_a_channel():
+    """What the frontend now sends. A browser cannot put a header on a
+    WebSocket handshake, so the credential goes in the URL — where proxies log
+    it. A ticket expires in thirty seconds, so the logged copy is worthless."""
+    client = _client()
+    venue = str(uuid.uuid4())
+    assert _opens(client, f"/ws/{venue}", _ticket("bartender", venue))
+
+
+def test_a_ticket_obeys_the_same_venue_and_role_rules():
+    client = _client()
+    mine, theirs = str(uuid.uuid4()), str(uuid.uuid4())
+    assert not _opens(client, f"/ws/{mine}", _ticket("owner", theirs))
+    assert not _opens(client, f"/ws/security/{mine}", _ticket("bartender", mine))
+
+
+def test_a_ticket_cannot_be_replayed_against_the_http_api():
+    """Separate token type, so a ticket scraped from a URL cannot be turned into
+    an API session."""
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    venue = str(uuid.uuid4())
+    r = TestClient(app).get(
+        "/api/v1/venues/me",
+        headers={"Authorization": f"Bearer {_ticket('owner', venue)}"},
+    )
+    assert r.status_code == 401
+
+
+def test_an_expired_ticket_opens_nothing():
+    from datetime import datetime, timedelta, timezone
+
+    from jose import jwt
+
+    from app.config import settings
+
+    client = _client()
+    venue = str(uuid.uuid4())
+    stale = jwt.encode(
+        {
+            "sub": str(uuid.uuid4()),
+            "venue_id": venue,
+            "role": "owner",
+            "type": "ws_ticket",
+            "exp": datetime.now(timezone.utc) - timedelta(seconds=5),
+        },
+        settings.SECRET_KEY,
+        algorithm=settings.ALGORITHM,
+    )
+    assert not _opens(client, f"/ws/{venue}", stale)
+
+
+def test_a_ticket_is_short_lived():
+    """The whole point of it. An hour-long credential in a proxy log is a
+    problem; a thirty-second one is not."""
+    from app.utils.security import WS_TICKET_SECONDS
+
+    assert WS_TICKET_SECONDS <= 120

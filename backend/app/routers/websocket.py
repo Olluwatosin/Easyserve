@@ -60,8 +60,13 @@ async def _authorise(
         return False
 
     payload = decode_token(token)
-    if not payload or payload.get("type") != "access":
-        await websocket.close(code=4003)  # bad or expired token
+    # A ticket from POST /auth/ws-ticket is preferred: it lives thirty seconds,
+    # so the copy that proxies write into their logs is worthless by the time
+    # anybody could read it. A full access token is still accepted so a client
+    # mid-deploy keeps working, and so a venue running an older build is not cut
+    # off — it can be refused once nothing sends one.
+    if not payload or payload.get("type") not in ("ws_ticket", "access"):
+        await websocket.close(code=4003)  # bad or expired credential
         return False
 
     if payload.get("venue_id") != venue_id:

@@ -149,3 +149,32 @@ async def set_recovery_phone(
     current_user.phone = normalised
     await db.commit()
     return None
+
+
+@router.post("/ws-ticket")
+@limiter.limit("60/minute")
+async def ws_ticket(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+):
+    """Exchange the current session for a thirty-second socket credential.
+
+    A browser cannot put a header on a WebSocket handshake, so the token had to
+    travel in the URL — where proxies and platforms log it, with an hour of life
+    still on it. This hands out something that is worthless almost immediately.
+
+    Authorised by the access token in the Authorization header, which is where
+    it belongs and where it is not logged.
+    """
+    from app.utils.security import WS_TICKET_SECONDS, create_ws_ticket
+
+    return {
+        "ticket": create_ws_ticket(
+            {
+                "sub": current_user.id,
+                "venue_id": current_user.venue_id,
+                "role": current_user.role,
+            }
+        ),
+        "expires_in": WS_TICKET_SECONDS,
+    }
