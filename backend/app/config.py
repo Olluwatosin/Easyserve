@@ -15,9 +15,21 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
-    SUPABASE_URL: str = ""
-    SUPABASE_KEY: str = ""
-    SUPABASE_BUCKET_MENU: str = "menu-images"
+    #: Cloudinary, in the single-URL form its own dashboard and SDKs use:
+    #:
+    #:     cloudinary://<api_key>:<api_secret>@<cloud_name>
+    #:
+    #: One value to copy, and the cloud name travels with the credential rather
+    #: than being configured separately and getting out of step with it.
+    #: Unset means menu photos go to local disk — correct for development and
+    #: for a VPS with a real volume, wrong on a container host where the disk is
+    #: wiped on every deploy. /health reports which store is live.
+    CLOUDINARY_URL: str = ""
+
+    #: Where uploads land in the media library. Keeps a venue's photos out of
+    #: whatever else lives in the same Cloudinary account.
+    CLOUDINARY_FOLDER: str = "easyserve/menu"
+
     EXIT_PASS_DEFAULT_MINUTES: int = 10
     ENVIRONMENT: str = "development"
     ALLOWED_ORIGINS: str = "http://localhost:3000"

@@ -15,6 +15,7 @@
 #   ALLOWED_ORIGINS       https://<your-app>.vercel.app
 #   FRONTEND_URL          https://<your-app>.vercel.app
 #   SENTRY_DSN            optional
+#   CLOUDINARY_URL        menu photo storage; without it photos die on deploy
 
 services:
   - type: web
@@ -47,6 +48,11 @@ services:
       - key: FRONTEND_URL
         sync: false
       - key: SENTRY_DSN
+        sync: false
+      # Menu photos. Unset, they go to the container filesystem and are deleted
+      # on every deploy — /health reports "images":"local-disk" when that is the
+      # case. Set in the dashboard, never in git.
+      - key: CLOUDINARY_URL
         sync: false
       # Paystack intentionally unset on the demo — payment endpoints return 503
       # rather than touching a live merchant account.
