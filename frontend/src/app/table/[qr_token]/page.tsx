@@ -86,6 +86,13 @@ function ItemImage({ item }: { item: MenuItem }) {
     );
   }
 
+  // A Cloudinary URL already carries f_auto,q_auto — the CDN has picked the
+  // format and quality for the requesting phone before the bytes leave it.
+  // Sending it through Vercel's optimiser as well would do that work twice,
+  // spend image-optimisation quota to achieve nothing, and add a hop in front
+  // of a guest on mobile data.
+  const alreadyOptimised = item.image_url.includes("res.cloudinary.com");
+
   return (
     <Image
       src={item.image_url}
@@ -94,6 +101,7 @@ function ItemImage({ item }: { item: MenuItem }) {
       className="object-cover"
       onError={() => setError(true)}
       sizes="96px"
+      unoptimized={alreadyOptimised}
     />
   );
 }

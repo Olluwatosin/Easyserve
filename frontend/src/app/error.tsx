@@ -15,6 +15,7 @@
  */
 
 import { useEffect } from "react";
+import Link from "next/link";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
 import { reportError } from "@/lib/reportError";
@@ -58,13 +59,13 @@ export default function ErrorScreen({
           <RefreshCw size={15} />
           Try again
         </button>
-        <a
+        <Link
           href="/"
           className="btn-outline w-full"
           style={{ textDecoration: "none" }}
         >
           Start again
-        </a>
+        </Link>
 
         {error.digest && (
           <p

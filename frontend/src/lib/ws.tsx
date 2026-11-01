@@ -18,8 +18,15 @@ export function useReconnectingWS(
   onMessage: (msg: { event: string; data: Record<string, unknown> }) => void
 ): WSStatus {
   const [status, setStatus] = useState<WSStatus>("connecting");
+  // The handler is read through a ref so that passing a new inline function on
+  // every render does not tear down and rebuild the socket. Assigned in an
+  // effect rather than during render: React may render a component twice, or
+  // abandon a render part-way, and a ref written during one of those is a write
+  // that was not supposed to happen. React 19's lint rules now say so.
   const handlerRef = useRef(onMessage);
-  handlerRef.current = onMessage;
+  useEffect(() => {
+    handlerRef.current = onMessage;
+  }, [onMessage]);
 
   useEffect(() => {
     if (!url) return;
