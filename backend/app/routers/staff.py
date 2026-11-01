@@ -13,7 +13,7 @@ from app.services.whatsapp_service import normalise_phone
 from datetime import datetime, timezone
 
 from app.services.audit_service import log_action
-from app.utils.security import generate_readable_password, hash_password
+from app.utils.security import generate_readable_password, hash_password, verify_password
 
 router = APIRouter(prefix="/staff", tags=["staff"])
 
@@ -40,6 +40,53 @@ def _validated_pin(pin: str) -> str:
     return pin
 
 
+async def _refuse_duplicate_pin(
+    db: AsyncSession, venue_id: str, pin: str, *, excluding: str | None = None
+) -> None:
+    """A PIN has to identify exactly one person at a venue.
+
+    Nothing used to check this, and the keypad resolves a PIN by trying every
+    account at the venue and taking the first hash that matches — from a query
+    with no ordering. So two people sharing a PIN produced, silently:
+
+    * one of them permanently unable to reach their own account, because their
+      PIN signed them in as the other person;
+    * that person holding the **other's role**, which with no ORDER BY was
+      whichever row Postgres happened to return first — a bartender could land
+      on the cashier's account and take payments;
+    * every audited action attributed to the wrong name, which is the one thing
+      an audit trail exists to get right;
+    * shift hours accruing to the wrong person, so payroll was wrong and nothing
+      explained why.
+
+    Four digits is 10,000 combinations, so random collision across fifteen staff
+    is around 1%. PINs are not random though — assigned by hand they cluster on
+    1234, 1111 and birth years, and the demo venue ships 1111 through 5555 as a
+    pattern to copy. In practice this was likely rather than unlikely.
+
+    Checked by comparing against every stored hash because they are bcrypt and
+    cannot be looked up directly. A venue has tens of staff, not thousands, so
+    the cost is irrelevant next to being wrong.
+    """
+    rows = await db.execute(
+        select(User).where(
+            User.venue_id == venue_id,
+            User.pin_hash.isnot(None),
+        )
+    )
+    for other in rows.scalars().all():
+        if excluding is not None and other.id == excluding:
+            continue
+        if verify_password(pin, other.pin_hash):
+            # Names the holder: the owner is choosing a PIN for someone and
+            # needs to know which colleague to pick a different one from. It
+            # reveals nothing a venue owner cannot already see on the staff page.
+            raise HTTPException(
+                status_code=409,
+                detail=f"{other.full_name} already uses that PIN — choose another",
+            )
+
+
 @router.get("", response_model=list[UserResponse])
 async def list_staff(
     current_user: User = Depends(require_roles("owner")),
@@ -62,6 +109,7 @@ async def create_staff(
         raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {allowed_roles}")
 
     _validated_pin(req.pin)
+    await _refuse_duplicate_pin(db, current_user.venue_id, req.pin)
 
     result = await db.execute(select(User).where(User.email == req.email))
     if result.scalar_one_or_none():
@@ -102,6 +150,11 @@ async def set_staff_pin(
     user = result.scalar_one_or_none()
     if not user:
         raise HTTPException(status_code=404, detail="Staff member not found")
+    # Excluding this account, so re-setting somebody's own PIN to what it
+    # already is does not collide with itself.
+    await _refuse_duplicate_pin(
+        db, current_user.venue_id, req.pin, excluding=user.id
+    )
     user.pin_hash = hash_password(req.pin)
     await db.commit()
 

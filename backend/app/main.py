@@ -83,6 +83,38 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
+@app.middleware("http")
+async def security_headers(request, call_next):
+    """Headers every response should carry, and none did.
+
+    The API mostly serves JSON, where the exposure is narrower than it sounds.
+    It also serves uploaded images out of /static/uploads, and a file-serving
+    path with no `nosniff` is the one that actually matters here — a browser
+    content-sniffing an upload is how an image becomes a script.
+
+    These are also the first thing a client's IT reviewer runs, and a hotel
+    group will have one.
+
+    No Content-Security-Policy on the API: it serves data rather than documents,
+    and a policy here would be theatre. The frontend is where a CSP belongs, and
+    Vercel is the right place to set it.
+    """
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Permissions-Policy", "geolocation=(), microphone=(), camera=()"
+    )
+    # Only over HTTPS, and only in a deployed environment — sending HSTS from a
+    # local http server would pin a developer's browser to https on localhost.
+    if settings.ENVIRONMENT not in ("development", "test"):
+        response.headers.setdefault(
+            "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
+        )
+    return response
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins_list,

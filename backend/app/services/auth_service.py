@@ -158,12 +158,18 @@ async def pin_login(db: AsyncSession, req: PinLoginRequest) -> TokenResponse:
             detail="That sign-in link is not for a venue we know — ask the owner for a new one",
         )
 
+    # Ordered by creation so the resolution is deterministic. Duplicate PINs are
+    # now refused when they are set, but accounts created before that rule
+    # existed may still collide, and silently rotating which of them a PIN opens
+    # between one request and the next is the worst version of that bug.
     result = await db.execute(
-        select(User).where(
+        select(User)
+        .where(
             User.venue_id == venue.id,
             User.is_active == True,
             User.pin_hash.isnot(None),
         )
+        .order_by(User.created_at.asc(), User.id.asc())
     )
     for user in result.scalars().all():
         if verify_password(req.pin, user.pin_hash):

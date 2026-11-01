@@ -69,11 +69,19 @@ async def place_order(db: AsyncSession, qr_token: str, req: PlaceOrderRequest) -
     order_items = []
     stock_deductions: list[tuple[MenuItem, int]] = []
     total = 0.0
-    for inp in req.items:
-        res = await db.execute(
-            select(MenuItem).where(MenuItem.id == inp.menu_item_id, MenuItem.venue_id == venue_id)
+    # Every item in one query. This used to issue a SELECT per line, so a
+    # ten-item round cost ten round trips — which on a pooled connection is the
+    # slowest part of placing an order, at the moment a guest is watching.
+    wanted = [inp.menu_item_id for inp in req.items]
+    found = await db.execute(
+        select(MenuItem).where(
+            MenuItem.id.in_(wanted), MenuItem.venue_id == venue_id
         )
-        item = res.scalar_one_or_none()
+    )
+    by_id = {m.id: m for m in found.scalars().all()}
+
+    for inp in req.items:
+        item = by_id.get(inp.menu_item_id)
         if not item:
             raise HTTPException(status_code=404, detail=f"Menu item {inp.menu_item_id} not found")
         effective_price = apply_promo(item, promos)

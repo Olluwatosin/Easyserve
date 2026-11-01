@@ -149,7 +149,17 @@ async def upload_image(
 ):
     if file.content_type not in _ALLOWED_MIME:
         raise HTTPException(400, "Only JPEG, PNG, WebP or GIF images are allowed")
-    contents = await file.read()
+
+    # Refuse on the declared length before reading anything. The size used to be
+    # checked after `await file.read()`, so a deliberately huge body was buffered
+    # in full before being rejected — on an instance with 512MB.
+    declared = request.headers.get("content-length")
+    if declared and declared.isdigit() and int(declared) > _MAX_BYTES * 1.1:
+        raise HTTPException(400, "Image must be under 5 MB")
+
+    # Content-Length can be absent or lie, so the read is also bounded: one byte
+    # past the limit is enough to know, and nothing larger is ever held.
+    contents = await file.read(_MAX_BYTES + 1)
     if len(contents) > _MAX_BYTES:
         raise HTTPException(400, "Image must be under 5 MB")
 

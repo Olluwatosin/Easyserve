@@ -267,7 +267,9 @@ async def _sales_rate_by_night(
     night = (
         func.date(
             func.timezone(VENUE_TZ_NAME, StockMovement.created_at)
-            - text(f"INTERVAL '{BUSINESS_DAY_START_HOUR} hours'")
+            # A module constant, so never injectable — bound anyway so the
+            # f-string-into-SQL pattern does not survive to be copied.
+            - func.make_interval(0, 0, 0, 0, int(BUSINESS_DAY_START_HOUR))
         )
     ).label("night")
 
@@ -280,7 +282,12 @@ async def _sales_rate_by_night(
         .where(
             StockMovement.venue_id == venue_id,
             StockMovement.reason == "sale",
-            StockMovement.created_at >= func.now() - text(f"INTERVAL '{nights} days'"),
+            # Bound as a parameter rather than interpolated. `nights` is only
+            # ever the default today, so this was not reachable — but it would
+            # have become injectable the day somebody added ?nights= to the
+            # reorder endpoint, which is a natural thing to want.
+            StockMovement.created_at
+            >= func.now() - func.make_interval(0, 0, 0, int(nights)),
         )
         .group_by(StockMovement.menu_item_id, night)
     )
