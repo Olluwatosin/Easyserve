@@ -50,6 +50,12 @@ jobs:
       - uses: astral-sh/setup-uv@v4
         with:
           enable-cache: true
+          # Taken from .python-version at the repo root, so CI and a developer's
+          # machine resolve the same interpreter. Unpinned, uv takes the newest
+          # the runner ships — and when the runner image moved to 3.14 this
+          # pipeline went red without a line of our code changing, because
+          # pillow 10.3 has no 3.14 wheel and uv fell back to a source build.
+          python-version-file: .python-version
 
       - name: Install dependencies
         run: uv sync --frozen
